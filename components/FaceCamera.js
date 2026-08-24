@@ -7,7 +7,7 @@ function friendlyMessage(error) {
   const message = error?.message || 'Unable to detect a face.';
   if (message.includes('Multiple faces')) return 'Please keep only one face in the camera.';
   if (message.includes('No face') || message.includes('too small')) return 'Camera ready. Keep one face clearly visible.';
-  if (message.includes('Face not recognized')) return 'Face not enrolled. Please enroll the teacher first.';
+  if (message.includes('Face not recognized')) return 'Face did not match an enrolled teacher. Look straight at the camera and try again.';
   return message;
 }
 

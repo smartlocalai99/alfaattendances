@@ -24,7 +24,7 @@ Set these values in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
 SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
-NEXT_PUBLIC_FACE_MATCH_THRESHOLD=0.48
+NEXT_PUBLIC_FACE_MATCH_THRESHOLD=0.58
 SCHOOL_TIMEZONE=Asia/Kolkata
 ```
 
