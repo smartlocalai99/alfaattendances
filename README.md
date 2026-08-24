@@ -30,6 +30,24 @@ SCHOOL_TIMEZONE=Asia/Kolkata
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` through a `NEXT_PUBLIC_` variable.
 
+## Vercel deployment
+
+The values in `.env` are local-only and are intentionally not deployed with Git.
+In Vercel, open the project **Settings → Environment Variables** and add these
+same variables for the **Production** environment, then redeploy:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_FACE_MATCH_THRESHOLD
+SCHOOL_TIMEZONE
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` must be kept private (do not prefix it with
+`NEXT_PUBLIC_`). The deployed dashboard and attendance API both require these
+values; without them, the app displays the configuration errors shown in the UI.
+
 ## No-login setup
 
 This app is configured for a trusted internal deployment with no login page. Run [`supabase/migrations/002_anonymous_access.sql`](supabase/migrations/002_anonymous_access.sql) in the Supabase SQL Editor after the main migration. It allows the browser client to create and manage teachers, attendance, notes, and payroll without authentication.

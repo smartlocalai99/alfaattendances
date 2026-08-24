@@ -1,6 +1,6 @@
 import { admin } from '@/lib/supabaseAdmin';
 
-const requiredFields = ['full_name', 'email', 'phone', 'employee_id', 'subject', 'qualification', 'joining_date', 'monthly_salary', 'working_hours', 'status'];
+const requiredFields = ['full_name', 'email', 'phone', 'subject', 'qualification', 'joining_date', 'monthly_salary', 'working_hours', 'status'];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
       full_name: String(teacher.full_name).trim(),
       email: String(teacher.email).trim(),
       phone: String(teacher.phone).trim(),
-      employee_id: String(teacher.employee_id).trim(),
+      employee_id: `TCH-${crypto.randomUUID()}`,
       subject: String(teacher.subject).trim(),
       qualification: String(teacher.qualification).trim(),
       joining_date: teacher.joining_date,
@@ -27,10 +27,6 @@ export default async function handler(req, res) {
     }
 
     const db = admin();
-    const duplicate = await db.from('teachers').select('id').eq('employee_id', payload.employee_id).maybeSingle();
-    if (duplicate.error) throw duplicate.error;
-    if (duplicate.data) return res.status(409).json({ error: 'A teacher with this Employee ID already exists.' });
-
     const saved = await db.from('teachers').insert(payload).select('id').single();
     if (saved.error) throw saved.error;
     return res.status(201).json({ id: saved.data.id });
