@@ -1,0 +1,2 @@
+import { useEffect, useState } from 'react'; import { supabase } from '@/lib/supabaseClient';
+export default function useSession(){const [session,setSession]=useState(null);useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>setSession(s));return()=>subscription.unsubscribe()},[]);return session;}

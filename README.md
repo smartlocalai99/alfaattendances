@@ -1,40 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# TeachTrack
 
-## Getting Started
-
-First, run the development server:
+TeachTrack is a single Next.js application that runs on port 3000.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Routes
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+- `http://localhost:3000/dashboard` — teacher management and attendance history
+- `http://localhost:3000/attendance` — camera-based face attendance kiosk
+- `http://localhost:3000/dashboard` — dashboard, daily IN/OUT records, and payroll
+- `http://localhost:3000/attendance` — attendance face-verification PWA
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+The kiosk marks IN on a teacher’s first successful face scan each day and OUT on the second scan. From a teacher profile, use the enrollment link to open `/attendance/enroll` and capture that teacher’s face descriptor. Raw photos are not stored.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set these values in `.env.local`:
 
-## Learn More
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
+SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
+NEXT_PUBLIC_FACE_MATCH_THRESHOLD=0.48
+SCHOOL_TIMEZONE=Asia/Kolkata
+```
 
-To learn more about Next.js, take a look at the following resources:
+Never expose `SUPABASE_SERVICE_ROLE_KEY` through a `NEXT_PUBLIC_` variable.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+## No-login setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This app is configured for a trusted internal deployment with no login page. Run [`supabase/migrations/002_anonymous_access.sql`](supabase/migrations/002_anonymous_access.sql) in the Supabase SQL Editor after the main migration. It allows the browser client to create and manage teachers, attendance, notes, and payroll without authentication.
 
-## Deploy on Vercel
+## Supabase setup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+Run [`supabase/migrations/001_teacher_attendance.sql`](supabase/migrations/001_teacher_attendance.sql) in Supabase SQL Editor. Create an Auth user, then use the migration’s final commented SQL statement to assign that user the `admin` role.
