@@ -1,4 +1,5 @@
 import { admin } from '@/lib/supabaseAdmin';
+import { getEnrolledFaces } from '@/lib/enrolledFaces';
 import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
 
 const defaultMatchThreshold = 0.58;
@@ -15,9 +16,7 @@ export default async function handler(req, res) {
     const { faceDescriptor } = req.body;
     if (!isFaceDescriptor(faceDescriptor)) throw new Error('Invalid face data.');
     const db = admin();
-    const list = await db.from('teachers').select('id,full_name,face_descriptor').eq('status', 'active');
-    if (list.error) throw list.error;
-    const enrolledTeachers = (list.data || []).filter((teacher) => isFaceDescriptor(teacher.face_descriptor));
+    const enrolledTeachers = await getEnrolledFaces();
     if (!enrolledTeachers.length) {
       return res.status(401).json({ error: 'No enrolled teacher faces are available yet.' });
     }

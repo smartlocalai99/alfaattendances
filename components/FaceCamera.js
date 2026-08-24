@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { descriptor, loadModels } from '@/lib/faceRecognition';
 
-const retryDelay = 1600;
+const retryDelay = 650;
 
 function friendlyMessage(error) {
   const message = error?.message || 'Unable to detect a face.';
   if (message.includes('Multiple faces')) return 'Please keep only one face in the camera.';
-  if (message.includes('No face') || message.includes('too small')) return 'Camera ready. Keep one face clearly visible.';
+  if (message.includes('No face') || message.includes('too small') || message.includes('unclear')) return 'Detecting Face... Keep one clear face inside the guide.';
   if (message.includes('Face not recognized')) return 'Face did not match an enrolled teacher. Look straight at the camera and try again.';
   return message;
 }
 
-export default function FaceCamera({ onCapture, successMessage = 'Attendance marked successfully', readyMessage = 'Camera ready. Position your complete face inside the guide.', processingMessage = 'Verifying face...' }) {
+export default function FaceCamera({ onCapture, successMessage = 'Face Recognized', readyMessage = 'Detecting Face...', processingMessage = 'Verifying...' }) {
   const video = useRef(null);
   const stream = useRef(null);
   const timer = useRef(null);
@@ -23,13 +23,13 @@ export default function FaceCamera({ onCapture, successMessage = 'Attendance mar
     let mounted = true;
 
     async function scan() {
-      if (!mounted || completed.current || scanning.current || !video.current?.readyState) return;
+      if (!mounted || completed.current || scanning.current || video.current?.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
       scanning.current = true;
       try {
         const faceDescriptor = await descriptor(video.current);
         if (!mounted) return;
-        setMessage('Face detected');
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        setMessage('Face Detected');
+        await new Promise((resolve) => window.setTimeout(resolve, 75));
         if (!mounted) return;
         setMessage(processingMessage);
         await onCapture(faceDescriptor);
@@ -49,14 +49,19 @@ export default function FaceCamera({ onCapture, successMessage = 'Attendance mar
       try {
         await loadModels();
         stream.current = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            frameRate: { ideal: 24, max: 30 },
+          },
           audio: false,
         });
         video.current.srcObject = stream.current;
         await video.current.play();
         if (!mounted) return;
         setMessage(readyMessage);
-        timer.current = window.setTimeout(scan, 400);
+        timer.current = window.setTimeout(scan, 50);
       } catch (error) {
         if (!mounted) return;
         setMessage(error.name === 'NotAllowedError' ? 'Camera permission is required.' : /404|fetch/i.test(error.message) ? 'Face models are missing.' : 'Camera unavailable. Please check your device camera.');

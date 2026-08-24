@@ -1,4 +1,5 @@
 import { admin } from '@/lib/supabaseAdmin';
+import { clearEnrolledFacesCache } from '@/lib/enrolledFaces';
 import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
 
 export default async function handler(req, res) {
@@ -26,6 +27,7 @@ export default async function handler(req, res) {
     if (!isFaceDescriptor(saved.data.face_descriptor)) {
       throw new Error('Face enrollment could not be verified after saving. Please try again.');
     }
+    clearEnrolledFacesCache();
     return res.json({
       ok: true,
       teacher: {
