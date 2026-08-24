@@ -16,7 +16,10 @@ export default function EditTeacher() {
   }, [router.query.id]);
 
   async function save(form) {
-    const { error } = await requireSupabase().from('teachers').update({ ...form, monthly_salary: Number(form.monthly_salary || 0), working_hours: Number(form.working_hours || 8) }).eq('id', router.query.id);
+    const { error } = await requireSupabase().from('teachers').update({
+      ...form,
+      monthly_salary: form.monthly_salary == null || form.monthly_salary === '' ? 0 : Number(form.monthly_salary),
+    }).eq('id', router.query.id);
     if (error) return alert(error.message);
     setSavedTeacherId(router.query.id);
   }

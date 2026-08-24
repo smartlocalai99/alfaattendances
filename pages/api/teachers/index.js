@@ -1,6 +1,6 @@
 import { admin } from '@/lib/supabaseAdmin';
 
-const requiredFields = ['full_name', 'email', 'phone', 'subject', 'qualification', 'joining_date', 'monthly_salary', 'working_hours', 'status'];
+const requiredFields = ['full_name', 'email', 'phone', 'subject', 'status'];
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
@@ -16,14 +16,13 @@ export default async function handler(req, res) {
       phone: String(teacher.phone).trim(),
       employee_id: `TCH-${crypto.randomUUID()}`,
       subject: String(teacher.subject).trim(),
-      qualification: String(teacher.qualification).trim(),
-      joining_date: teacher.joining_date,
-      monthly_salary: Number(teacher.monthly_salary),
-      working_hours: Number(teacher.working_hours),
+      monthly_salary: teacher.monthly_salary === null || teacher.monthly_salary === '' || teacher.monthly_salary === undefined
+        ? 0
+        : Number(teacher.monthly_salary),
       status: teacher.status,
     };
-    if (!Number.isFinite(payload.monthly_salary) || payload.monthly_salary < 0 || !Number.isFinite(payload.working_hours) || payload.working_hours <= 0) {
-      return res.status(400).json({ error: 'Enter a valid monthly salary and working hours.' });
+    if (!Number.isFinite(payload.monthly_salary) || payload.monthly_salary < 0) {
+      return res.status(400).json({ error: 'Enter a valid monthly salary.' });
     }
 
     const db = admin();

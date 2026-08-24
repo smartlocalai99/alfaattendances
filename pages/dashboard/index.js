@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import StatCard from '@/components/StatCard';
+import FaceEnrollmentModal from '@/components/FaceEnrollmentModal';
+import MonthlyAttendanceReport from '@/components/MonthlyAttendanceReport';
 import { durationBetween } from '@/lib/payroll';
 
 const IST = 'Asia/Kolkata';
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [teachers, setTeachers] = useState([]);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
 
   async function load() {
     try {
@@ -47,11 +50,15 @@ export default function Dashboard() {
 
     window.addEventListener('focus', load);
 
-    return () => window.removeEventListener('focus', load);
+    return () => {
+      window.removeEventListener('focus', load);
+    };
   }, []);
 
   const rows = teachers.filter((teacher) =>
-    teacher.full_name.toLowerCase().includes(search.toLowerCase())
+    teacher.full_name
+      .toLowerCase()
+      .includes(search.toLowerCase())
   );
 
   // Active teachers
@@ -66,7 +73,7 @@ export default function Dashboard() {
       !teacher.attendance?.out_time
   ).length;
 
-  // Teacher has no attendance marked today
+  // Active teacher has no attendance marked today
   const absent = teachers.filter(
     (teacher) =>
       teacher.status === 'active' &&
@@ -88,16 +95,19 @@ export default function Dashboard() {
           href="/dashboard/teachers/new"
           className="btn-primary"
         >
-          + Enroll Teacher
+          + Add Teacher
         </Link>
       }
     >
-      {router.query.enrolled === '1' && (
+      {/* SUCCESS MESSAGE */}
+      {router.query.added === '1' && (
         <p className="mb-5 rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-          Teacher enrolled successfully.
+          Teacher saved successfully. Enroll their face whenever
+          you are ready.
         </p>
       )}
 
+      {/* ERROR MESSAGE */}
       {loadError && (
         <p className="mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
           {loadError}
@@ -115,7 +125,7 @@ export default function Dashboard() {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
-          })}{' '}
+          })}
         </p>
       </div>
 
@@ -151,6 +161,10 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* MONTHLY ATTENDANCE REPORT */}
+      <MonthlyAttendanceReport />
+
+      {/* LIST OF TEACHERS */}
       <section className="card mt-7 p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
           <h2 className="m-0 text-lg font-bold">
@@ -161,7 +175,9 @@ export default function Dashboard() {
             className="field max-w-xs"
             placeholder="Search teachers…"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
           />
         </div>
 
@@ -171,76 +187,129 @@ export default function Dashboard() {
               <tr>
                 <th>Teacher</th>
                 <th>Subject</th>
-                <th>Today's IN</th>
-                <th>Today's OUT</th>
+                <th> IN</th>
+                <th> OUT</th>
                 <th>Working Hours</th>
                 <th>Status</th>
+                <th>Face</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {rows.map((teacher) => {
-                const record = teacher.attendance;
+              {rows.length > 0 ? (
+                rows.map((teacher) => {
+                  const record = teacher.attendance;
 
-                const status = !record
-                  ? 'Not Marked'
-                  : record.out_time
-                  ? 'Present'
-                  : 'Currently IN';
+                  const status = !record
+                    ? 'Not Marked'
+                    : record.out_time
+                    ? 'Present'
+                    : 'Currently IN';
 
-                return (
-                  <tr key={teacher.id}>
-                    <td>
-                      <b>{teacher.full_name}</b>
-                      <br />
-                     
-                    </td>
+                  return (
+                    <tr key={teacher.id}>
+                      {/* TEACHER */}
+                      <td>
+                        <b>{teacher.full_name}</b>
+                      </td>
 
-                    <td>
-                      {teacher.subject || '—'}
-                    </td>
+                      {/* SUBJECT */}
+                      <td>
+                        {teacher.subject || '—'}
+                      </td>
 
-                    <td>
-                      {time(record?.in_time)}
-                    </td>
+                      {/* TODAY'S IN */}
+                      <td>
+                        {time(record?.in_time)}
+                      </td>
 
-                    <td>
-                      {time(record?.out_time)}
-                    </td>
+                      {/* TODAY'S OUT */}
+                      <td>
+                        {time(record?.out_time)}
+                      </td>
 
-                    <td>
-                      {durationBetween(
-                        record?.in_time,
-                        record?.out_time
-                      )}
-                    </td>
-
-                    <td>
-                      <span
-                        className={
+                      {/* WORKING HOURS */}
+                      <td>
+                        {durationBetween(
+                          record?.in_time,
                           record?.out_time
-                            ? 'text-emerald-700'
-                            : record?.in_time
-                            ? 'text-amber-700'
-                            : 'text-slate-500'
-                        }
-                      >
-                        {status}
-                      </span>
-                    </td>
+                        )}
+                      </td>
 
-                    <td>
-                     
-                    </td>
-                  </tr>
-                );
-              })}
+                      {/* STATUS */}
+                      <td>
+                        <span
+                          className={
+                            record?.out_time
+                              ? 'text-emerald-700'
+                              : record?.in_time
+                              ? 'text-amber-700'
+                              : 'text-slate-500'
+                          }
+                        >
+                          {status}
+                        </span>
+                      </td>
+
+                      {/* FACE */}
+                      <td>
+                        <span
+                          className={
+                            teacher.face_enrolled
+                              ? 'text-emerald-700'
+                              : 'text-slate-500'
+                          }
+                        >
+                          {teacher.face_enrolled
+                            ? 'Enrolled'
+                            : 'Not enrolled'}
+                        </span>
+                      </td>
+
+                      {/* ACTIONS */}
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary whitespace-nowrap"
+                          onClick={() =>
+                            setSelectedTeacher(teacher)
+                          }
+                        >
+                          {teacher.face_enrolled
+                            ? 'Update Face'
+                            : 'Enroll Face'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="py-8 text-center text-slate-500"
+                  >
+                    No teachers found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {/* FACE ENROLLMENT MODAL */}
+      {selectedTeacher && (
+        <FaceEnrollmentModal
+          teacherId={selectedTeacher.id}
+          teacherName={selectedTeacher.full_name}
+          onComplete={() => {
+            setSelectedTeacher(null);
+            load();
+          }}
+        />
+      )}
     </Layout>
   );
 }
-
-

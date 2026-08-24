@@ -11,7 +11,7 @@ function friendlyMessage(error) {
   return message;
 }
 
-export default function FaceCamera({ onCapture, successMessage = 'Attendance marked successfully', readyMessage = 'Camera ready. Keep one face clearly visible.', processingMessage = 'Verifying face...' }) {
+export default function FaceCamera({ onCapture, successMessage = 'Attendance marked successfully', readyMessage = 'Camera ready. Position your complete face inside the guide.', processingMessage = 'Verifying face...' }) {
   const video = useRef(null);
   const stream = useRef(null);
   const timer = useRef(null);
@@ -48,7 +48,10 @@ export default function FaceCamera({ onCapture, successMessage = 'Attendance mar
     (async () => {
       try {
         await loadModels();
-        stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        stream.current = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
+          audio: false,
+        });
         video.current.srcObject = stream.current;
         await video.current.play();
         if (!mounted) return;
@@ -67,5 +70,14 @@ export default function FaceCamera({ onCapture, successMessage = 'Attendance mar
     };
   }, [onCapture, successMessage, readyMessage, processingMessage]);
 
-  return <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-900"><video className="h-full w-full object-cover" muted playsInline ref={video}/><p className="absolute inset-x-3 bottom-3 m-0 rounded-lg bg-black/70 p-2 text-center text-sm text-white">{message}</p></div>;
+  return <div className="face-camera">
+    <video className="face-camera__video" muted playsInline ref={video}/>
+    <div className="face-camera__guide" aria-hidden="true">
+      <span className="face-camera__guide-corner face-camera__guide-corner--top-left"/>
+      <span className="face-camera__guide-corner face-camera__guide-corner--top-right"/>
+      <span className="face-camera__guide-corner face-camera__guide-corner--bottom-left"/>
+      <span className="face-camera__guide-corner face-camera__guide-corner--bottom-right"/>
+    </div>
+    <p className="face-camera__message" aria-live="polite">{message}</p>
+  </div>;
 }

@@ -4,24 +4,18 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import Layout from '@/components/Layout';
 import TeacherForm from '@/components/TeacherForm';
-import FaceEnrollmentModal from '@/components/FaceEnrollmentModal';
 
 const requiredFields = [
   'full_name',
   'email',
   'phone',
   'subject',
-  'qualification',
-  'joining_date',
-  'monthly_salary',
-  'working_hours',
   'status',
 ];
 
 export default function NewTeacher() {
   const router = useRouter();
   const [error, setError] = useState('');
-  const [savedTeacherId, setSavedTeacherId] = useState('');
 
   async function save(form) {
     setError('');
@@ -42,22 +36,14 @@ export default function NewTeacher() {
       email: form.email.trim(),
       phone: form.phone.trim(),
       subject: form.subject.trim(),
-      qualification: form.qualification.trim(),
-      joining_date: form.joining_date,
-      monthly_salary: Number(form.monthly_salary),
-      working_hours: Number(form.working_hours),
+      monthly_salary: form.monthly_salary == null || form.monthly_salary === '' ? 0 : Number(form.monthly_salary),
       status: form.status,
     };
 
     if (
-      !Number.isFinite(teacher.monthly_salary) ||
-      teacher.monthly_salary < 0 ||
-      !Number.isFinite(teacher.working_hours) ||
-      teacher.working_hours <= 0
+      !Number.isFinite(teacher.monthly_salary) || teacher.monthly_salary < 0
     ) {
-      setError(
-        'Enter a valid monthly salary and working hours.'
-      );
+      setError('Enter a valid monthly salary.');
       return;
     }
 
@@ -79,7 +65,7 @@ export default function NewTeacher() {
         return;
       }
 
-      setSavedTeacherId(data.id);
+      router.replace('/dashboard?added=1');
     } catch {
       setError(
         'Unable to save the teacher. Please check your connection and try again.'
@@ -102,15 +88,15 @@ export default function NewTeacher() {
             />
           </Link>
 
-          <span>Enroll Teacher</span>
+          <span>Add Teacher</span>
         </div>
       }
-      description="Add a new teacher and face ID"
+      description="Add teacher details. Face enrollment can be done later from the teachers list."
       backHref={null}
     >
       <div className="card mx-auto max-w-3xl p-6">
         <p className="mt-0 text-sm text-slate-500">
-          Save the teacher details, then enroll their face without leaving this page.
+          Add the teacher details now. You can enroll their face later from the teachers list.
         </p>
 
         {error && (
@@ -124,7 +110,6 @@ export default function NewTeacher() {
           submitText="Save Teacher"
         />
       </div>
-      {savedTeacherId && <FaceEnrollmentModal teacherId={savedTeacherId} onComplete={() => router.push('/dashboard')}/>}
     </Layout>
   );
 }
