@@ -1,18 +1,17 @@
 import { admin } from '@/lib/supabaseAdmin';
-
-const distance = (first, second) => Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0));
+import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   try {
     const { faceDescriptor } = req.body;
-    if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) throw new Error('Invalid face data.');
+    if (!isFaceDescriptor(faceDescriptor)) throw new Error('Invalid face data.');
     const db = admin();
-    const list = await db.from('teachers').select('id,full_name,face_descriptor').eq('status', 'active').eq('face_enrolled', true);
+    const list = await db.from('teachers').select('id,full_name,face_descriptor').eq('status', 'active');
     if (list.error) throw list.error;
     let match = null;
-    (list.data || []).forEach((teacher) => {
-      const value = distance(faceDescriptor, teacher.face_descriptor);
+    (list.data || []).filter((teacher) => isFaceDescriptor(teacher.face_descriptor)).forEach((teacher) => {
+      const value = faceDistance(faceDescriptor, teacher.face_descriptor);
       if (!match || value < match.distance) match = { ...teacher, distance: value };
     });
     const threshold = Number(process.env.FACE_MATCH_THRESHOLD || process.env.NEXT_PUBLIC_FACE_MATCH_THRESHOLD || 0.48);

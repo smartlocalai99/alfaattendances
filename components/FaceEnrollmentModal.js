@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import FaceCamera from '@/components/FaceCamera';
 
-export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete }) {
+export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete, onSaved }) {
   const [faceDescriptor, setFaceDescriptor] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +25,7 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to save the face.');
+      onSaved?.(data.teacher);
       setDone(true);
     } catch (saveError) {
       setError(saveError.message);
