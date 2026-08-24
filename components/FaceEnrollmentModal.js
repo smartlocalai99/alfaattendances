@@ -47,8 +47,8 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
           <>
             <FaceCamera
               onCapture={setFaceDescriptor}
-              readyMessage="Position your complete face inside the white guide. Keep only one face visible."
-              processingMessage="Checking face..."
+              readyMessage="Detecting Face..."
+              processingMessage="Verifying..."
               successMessage="Face detected. Ready to save."
             />
             {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}

@@ -629,6 +629,7 @@ export default function Dashboard() {
       {/* FACE ENROLLMENT MODAL */}
       {selectedTeacher && (
         <FaceEnrollmentModal
+          key={selectedTeacher.id}
           teacherId={selectedTeacher.id}
           teacherName={selectedTeacher.full_name}
           onSaved={(enrolledTeacher) => {

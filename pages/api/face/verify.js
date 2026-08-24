@@ -10,21 +10,30 @@ function matchThreshold() {
   return Number.isFinite(configured) ? Math.max(configured, defaultMatchThreshold) : defaultMatchThreshold;
 }
 
+function closestMatch(faceDescriptor, enrolledTeachers) {
+  return enrolledTeachers.reduce((match, teacher) => {
+    const value = faceDistance(faceDescriptor, teacher.face_descriptor);
+    return !match || value < match.distance ? { ...teacher, distance: value } : match;
+  }, null);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   try {
     const { faceDescriptor } = req.body;
     if (!isFaceDescriptor(faceDescriptor)) throw new Error('Invalid face data.');
     const db = admin();
-    const enrolledTeachers = await getEnrolledFaces();
+    let enrolledTeachers = await getEnrolledFaces();
+    let match = closestMatch(faceDescriptor, enrolledTeachers);
+
+    // A newly enrolled face may not be in another server process's short-lived cache.
+    if (!match || match.distance > matchThreshold()) {
+      enrolledTeachers = await getEnrolledFaces(true);
+      match = closestMatch(faceDescriptor, enrolledTeachers);
+    }
     if (!enrolledTeachers.length) {
       return res.status(401).json({ error: 'No enrolled teacher faces are available yet.' });
     }
-    let match = null;
-    enrolledTeachers.forEach((teacher) => {
-      const value = faceDistance(faceDescriptor, teacher.face_descriptor);
-      if (!match || value < match.distance) match = { ...teacher, distance: value };
-    });
     if (!match || match.distance > matchThreshold()) {
       return res.status(401).json({ error: 'Face not recognized. Use a clear, front-facing view or update the enrolled face.' });
     }
