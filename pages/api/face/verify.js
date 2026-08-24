@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       if (!match || value < match.distance) match = { ...teacher, distance: value };
     });
     const threshold = Number(process.env.FACE_MATCH_THRESHOLD || process.env.NEXT_PUBLIC_FACE_MATCH_THRESHOLD || 0.48);
-    if (!match || match.distance > threshold) return res.status(401).json({ error: 'Face not recognized. Please try again or contact administrator.' });
+    if (!match || match.distance > threshold) return res.status(401).json({ error: 'Face not enrolled. Please enroll the teacher first.' });
 
     const attendanceDate = new Intl.DateTimeFormat('en-CA', { timeZone: process.env.SCHOOL_TIMEZONE || 'Asia/Kolkata' }).format(new Date());
     const found = await db.from('attendance').select('*').eq('teacher_id', match.id).eq('attendance_date', attendanceDate).maybeSingle();

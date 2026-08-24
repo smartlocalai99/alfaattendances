@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import Layout from '@/components/Layout';
 import TeacherForm from '@/components/TeacherForm';
+import FaceEnrollmentModal from '@/components/FaceEnrollmentModal';
 
 const requiredFields = [
   'full_name',
@@ -20,6 +21,7 @@ const requiredFields = [
 export default function NewTeacher() {
   const router = useRouter();
   const [error, setError] = useState('');
+  const [savedTeacherId, setSavedTeacherId] = useState('');
 
   async function save(form) {
     setError('');
@@ -77,9 +79,7 @@ export default function NewTeacher() {
         return;
       }
 
-      await router.push(
-        `/dashboard/teachers/${data.id}`
-      );
+      setSavedTeacherId(data.id);
     } catch {
       setError(
         'Unable to save the teacher. Please check your connection and try again.'
@@ -110,7 +110,7 @@ export default function NewTeacher() {
     >
       <div className="card mx-auto max-w-3xl p-6">
         <p className="mt-0 text-sm text-slate-500">
-          Create the teacher record first, then enroll their face from the profile.
+          Save the teacher details, then enroll their face without leaving this page.
         </p>
 
         {error && (
@@ -124,6 +124,7 @@ export default function NewTeacher() {
           submitText="Save Teacher"
         />
       </div>
+      {savedTeacherId && <FaceEnrollmentModal teacherId={savedTeacherId} onComplete={() => router.push('/dashboard')}/>}
     </Layout>
   );
 }
