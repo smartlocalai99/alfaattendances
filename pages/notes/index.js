@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import Layout from '@/components/Layout';
-import { requireSupabase } from '@/lib/supabaseClient';
 import { calculatePayroll, money } from '@/lib/payroll';
 
 export default function Notes() {
@@ -32,53 +31,32 @@ export default function Notes() {
     loadTeachers();
   }, []);
 
+  async function loadTeachers() {
+    setLoadingTeachers(true);
+    setTeacherError('');
 
-async function loadTeachers() {
-  setLoadingTeachers(true);
-  setTeacherError('');
+    try {
+      const response = await fetch('/api/teachers');
+      const result = await response.json();
 
-  try {
-    const supabase = requireSupabase();
+      if (!response.ok) {
+        throw new Error(result.error);
+      }
 
-    const { data, error } = await supabase
-      .from('teachers')
-      .select(`
-        id,
-        employee_id,
-        full_name,
-        email,
-        phone,
-        subject,
-        qualification,
-        joining_date,
-        monthly_salary,
-        working_hours,
-        status
-      `)
-      .order('full_name', {
-        ascending: true,
-      });
+      setTeachers(result.teachers || []);
+    } catch (error) {
+      console.error('Error loading teachers:', error);
 
-    if (error) {
-      throw error;
+      setTeachers([]);
+
+      setTeacherError(
+        error?.message ||
+          'Unable to load teachers from Supabase.'
+      );
+    } finally {
+      setLoadingTeachers(false);
     }
-
-    console.log('Teachers from Supabase:', data);
-
-    setTeachers(data || []);
-  } catch (error) {
-    console.error('Error loading teachers:', error);
-
-    setTeachers([]);
-
-    setTeacherError(
-      error?.message ||
-        'Unable to load teachers from Supabase.'
-    );
-  } finally {
-    setLoadingTeachers(false);
   }
-}
 
   /* =========================================
      SELECTED TEACHER
@@ -105,24 +83,24 @@ async function loadTeachers() {
 
   async function loadNotes() {
     try {
-      const supabase = requireSupabase();
+      const response = await fetch(
+        `/api/teacher-notes?teacherId=${encodeURIComponent(id)}`
+      );
 
-      const { data, error } = await supabase
-        .from('teacher_notes')
-        .select('*')
-        .eq('teacher_id', id)
-        .order('created_at', {
-          ascending: false,
-        });
+      const result = await response.json();
 
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(result.error);
       }
 
-      setNotes(data || []);
+      setNotes(result.notes || []);
     } catch (error) {
       console.error('Error loading notes:', error);
-      alert(error?.message || 'Unable to load notes.');
+
+      alert(
+        error?.message ||
+          'Unable to load notes.'
+      );
     }
   }
 
@@ -144,22 +122,21 @@ async function loadTeachers() {
     setSaving(true);
 
     try {
-      const supabase = requireSupabase();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from('teacher_notes')
-        .insert({
+      const response = await fetch('/api/teacher-notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           teacher_id: id,
           note: note.trim(),
-          created_by: user?.id || null,
-        });
+        }),
+      });
 
-      if (error) {
-        throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error);
       }
 
       setNote('');
@@ -201,18 +178,19 @@ async function loadTeachers() {
       .slice(0, 10);
 
     try {
-      const supabase = requireSupabase();
+      const response = await fetch(
+        `/api/attendance?teacherId=${encodeURIComponent(
+          id
+        )}&start=${start}&end=${end}`
+      );
 
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('status')
-        .eq('teacher_id', id)
-        .gte('attendance_date', start)
-        .lte('attendance_date', end);
+      const result = await response.json();
 
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(result.error);
       }
+
+      const data = result.attendance;
 
       const count = (status) =>
         (data || []).filter(
@@ -254,35 +232,34 @@ async function loadTeachers() {
     setSaving(true);
 
     try {
-      const supabase = requireSupabase();
+      const response = await fetch('/api/payroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          teacher_id: id,
+          month: Number(month),
+          year: Number(year),
+          monthly_salary: summary.monthlySalary,
+          working_days: summary.workingDays,
+          present_days: summary.presentDays,
+          half_days: summary.halfDays,
+          paid_leave_days:
+            summary.paidLeaveDays,
+          unpaid_leave_days:
+            summary.unpaidLeaveDays,
+          gross_salary: summary.grossSalary,
+          deductions: summary.deductions,
+          net_salary: summary.netPay,
+          status: 'draft',
+        }),
+      });
 
-      const { error } = await supabase
-        .from('payroll')
-        .upsert(
-          {
-            teacher_id: id,
-            month: Number(month),
-            year: Number(year),
-            monthly_salary: summary.monthlySalary,
-            working_days: summary.workingDays,
-            present_days: summary.presentDays,
-            half_days: summary.halfDays,
-            paid_leave_days:
-              summary.paidLeaveDays,
-            unpaid_leave_days:
-              summary.unpaidLeaveDays,
-            gross_salary: summary.grossSalary,
-            deductions: summary.deductions,
-            net_salary: summary.netPay,
-            status: 'draft',
-          },
-          {
-            onConflict: 'teacher_id,month,year',
-          }
-        );
+      const result = await response.json();
 
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(result.error);
       }
 
       alert('Payroll saved as draft.');
@@ -303,6 +280,8 @@ async function loadTeachers() {
 
   /* =========================================
      TEACHER SELECT
+     Employee ID removed
+     Subject shown instead
   ========================================= */
 
   function TeacherSelect({ className = '' }) {
@@ -328,8 +307,8 @@ async function loadTeachers() {
             value={item.id}
           >
             {item.full_name}
-            {item.employee_id
-              ? ` — ${item.employee_id}`
+            {item.subject
+              ? ` — ${item.subject}`
               : ''}
           </option>
         ))}
@@ -414,10 +393,8 @@ async function loadTeachers() {
                 </p>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  {teacher.employee_id || 'No Employee ID'}
-                  {teacher.subject
-                    ? ` • ${teacher.subject}`
-                    : ''}
+                  {teacher.subject ||
+                    'No Subject'}
                 </p>
               </div>
 
@@ -539,7 +516,7 @@ async function loadTeachers() {
 
           <div className="grid gap-3 sm:grid-cols-3">
 
-            {/* Teacher from DB */}
+            {/* Teacher */}
 
             <TeacherSelect className="sm:col-span-3" />
 
@@ -619,6 +596,13 @@ async function loadTeachers() {
                 <b className="text-slate-900">
                   {teacher.full_name}
                 </b>
+
+                <br />
+
+                <span className="text-xs text-slate-500">
+                  {teacher.subject ||
+                    'No Subject'}
+                </span>
               </p>
 
               {[

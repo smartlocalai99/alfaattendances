@@ -3,9 +3,20 @@ import { admin } from '@/lib/supabaseAdmin';
 const requiredFields = ['full_name', 'email', 'phone', 'subject', 'status'];
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
-
   try {
+    const db = admin();
+
+    if (req.method === 'GET') {
+      const teachers = await db
+        .from('teachers')
+        .select('id,employee_id,full_name,email,phone,subject,qualification,joining_date,monthly_salary,working_hours,status')
+        .order('full_name', { ascending: true });
+      if (teachers.error) throw teachers.error;
+      return res.status(200).json({ teachers: teachers.data || [] });
+    }
+
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
+
     const teacher = req.body || {};
     const missing = requiredFields.find((field) => String(teacher[field] ?? '').trim() === '');
     if (missing) return res.status(400).json({ error: 'Please complete every required teacher field.' });
@@ -25,7 +36,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Enter a valid monthly salary.' });
     }
 
-    const db = admin();
     const saved = await db.from('teachers').insert(payload).select('id').single();
     if (saved.error) throw saved.error;
     return res.status(201).json({ id: saved.data.id });

@@ -1,0 +1,15 @@
+{
+  "id": "/attendance-pwa",
+  "name": "Attendances",
+  "short_name": "Attendances",
+  "description": "Teacher attendance application",
+  "start_url": "/attendance",
+  "scope": "/attendance",
+  "display": "standalone",
+  "theme_color": "#047857",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "/icons/alfa-logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/alfa-logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
