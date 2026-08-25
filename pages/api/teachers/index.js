@@ -1,6 +1,6 @@
 import { admin } from '@/lib/supabaseAdmin';
 
-const requiredFields = ['full_name', 'email', 'phone', 'subject', 'status'];
+const requiredFields = ['full_name', 'phone',  'status'];
 
 export default async function handler(req, res) {
   try {
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const teachers = await db
         .from('teachers')
-        .select('id,employee_id,full_name,email,phone,subject,qualification,joining_date,monthly_salary,working_hours,status')
+        .select('id,employee_id,full_name,phone,monthly_salary,working_hours,status')
         .order('full_name', { ascending: true });
       if (teachers.error) throw teachers.error;
       return res.status(200).json({ teachers: teachers.data || [] });
@@ -25,8 +25,6 @@ export default async function handler(req, res) {
       full_name: String(teacher.full_name).trim(),
       email: String(teacher.email).trim(),
       phone: String(teacher.phone).trim(),
-      employee_id: `TCH-${crypto.randomUUID()}`,
-      subject: String(teacher.subject).trim(),
       monthly_salary: teacher.monthly_salary === null || teacher.monthly_salary === '' || teacher.monthly_salary === undefined
         ? 0
         : Number(teacher.monthly_salary),

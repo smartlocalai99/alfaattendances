@@ -36,7 +36,7 @@ async function createReport(month, year) {
   const totalWorkingDays = start > today ? 0 : workingDays(start, end);
   const db = admin();
   const [teachersResult, attendanceResult] = await Promise.all([
-    db.from('teachers').select('id,full_name,employee_id,subject').eq('status', 'active').order('full_name'),
+    db.from('teachers').select('id,full_name,phone').eq('status', 'active').order('full_name'),
     start > today
       ? Promise.resolve({ data: [], error: null })
       : db.from('attendance').select('teacher_id,attendance_date,in_time,status').gte('attendance_date', start).lte('attendance_date', end),
@@ -62,8 +62,7 @@ async function createReport(month, year) {
     const absent = Math.max(0, totalWorkingDays - present);
     return {
       name: teacher.full_name,
-      employeeId: teacher.employee_id || '',
-      subject: teacher.subject || '',
+      mobileNumber: teacher.phone || '',
       present,
       absent,
       attendancePercentage: percentage(present, totalWorkingDays),
@@ -93,8 +92,7 @@ async function excelReport(report) {
   const sheet = workbook.addWorksheet('Monthly Attendance');
   sheet.columns = [
     { header: 'Teacher Name', key: 'name', width: 28 },
-    { header: 'Employee ID', key: 'employeeId', width: 18 },
-    { header: 'Subject', key: 'subject', width: 20 },
+    { header: 'Mobile Number', key: 'mobileNumber', width: 20 },
     { header: 'Present Days', key: 'present', width: 16 },
     { header: 'Absent Days', key: 'absent', width: 16 },
     { header: 'Attendance Percentage', key: 'attendancePercentage', width: 24 },
@@ -112,7 +110,7 @@ async function excelReport(report) {
   sheet.addRow(['Total Absent', report.summary.totalAbsent]);
   sheet.addRow(['Attendance Percentage', `${report.summary.attendancePercentage}%`]);
   sheet.addRow([]);
-  const headerRow = sheet.addRow(['Teacher Name', 'Employee ID', 'Subject', 'Present Days', 'Absent Days', 'Attendance Percentage']);
+  const headerRow = sheet.addRow(['Teacher Name', 'Mobile Number', 'Present Days', 'Absent Days', 'Attendance Percentage']);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF167A62' } };
   report.teachers.forEach((teacher) => {

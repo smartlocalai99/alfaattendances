@@ -153,7 +153,6 @@ export default function MonthlyAttendanceReport() {
               <thead>
                 <tr>
                   <th>Teacher Name</th>
-                  <th>Subject</th>
                   <th>Present Days</th>
                   <th>Absent Days</th>
                   <th>Attendance Percentage</th>
@@ -167,14 +166,12 @@ export default function MonthlyAttendanceReport() {
                     <tr
                       key={
                         teacher.id ||
-                        `${teacher.name}-${teacher.subject}-${index}`
+                        `${teacher.name}-${index}`
                       }
                     >
                       <td>
                         <b>{teacher.name}</b>
                       </td>
-
-                      <td>{teacher.subject || '-'}</td>
 
                       <td>{teacher.present ?? 0}</td>
 

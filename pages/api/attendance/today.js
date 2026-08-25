@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
     const db = admin();
     const [teachersResult, attendanceResult] = await Promise.all([
-      db.from('teachers').select('id,full_name,employee_id,subject,monthly_salary,status,face_enrolled,face_descriptor').order('full_name'),
+      db.from('teachers').select('id,full_name,monthly_salary,status,face_enrolled,face_descriptor').order('full_name'),
       db.from('attendance').select('id,teacher_id,attendance_date,in_time,out_time,status,verification_method,updated_at').eq('attendance_date', today),
     ]);
     if (teachersResult.error) throw teachersResult.error;

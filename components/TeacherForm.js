@@ -2,9 +2,7 @@ import { useState } from 'react';
 
 const fields = [
   ['full_name', 'Full Name'],
-  ['email', 'Email', 'email'],
   ['phone', 'Phone'],
-  ['subject', 'Subject'],
   ['monthly_salary', 'Monthly Salary', 'number'],
 ];
 
@@ -32,7 +30,10 @@ export default function TeacherForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+    <form
+      onSubmit={submit}
+      className="grid gap-4 sm:grid-cols-2"
+    >
       {fields.map(([k, l, t = 'text']) => (
         <label key={k}>
           <span className="label">{l}</span>
@@ -41,7 +42,11 @@ export default function TeacherForm({
             className="field"
             required={k !== 'monthly_salary'}
             type={t}
-            min={k === 'monthly_salary' ? '0' : undefined}
+            min={
+              k === 'monthly_salary'
+                ? '0'
+                : undefined
+            }
             value={form[k] || ''}
             onChange={(e) =>
               setForm({
@@ -72,7 +77,10 @@ export default function TeacherForm({
       </label>
 
       <div className="sm:col-span-2">
-        <button className="btn-primary" disabled={busy}>
+        <button
+          className="btn-primary"
+          disabled={busy}
+        >
           {busy ? 'Saving…' : submitText}
         </button>
       </div>

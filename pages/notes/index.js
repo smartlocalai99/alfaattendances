@@ -280,8 +280,7 @@ export default function Notes() {
 
   /* =========================================
      TEACHER SELECT
-     Employee ID removed
-     Subject shown instead
+     Only Teacher Name + Mobile Number
   ========================================= */
 
   function TeacherSelect({ className = '' }) {
@@ -307,8 +306,8 @@ export default function Notes() {
             value={item.id}
           >
             {item.full_name}
-            {item.subject
-              ? ` — ${item.subject}`
+            {item.mobile_number
+              ? ` — ${item.mobile_number}`
               : ''}
           </option>
         ))}
@@ -392,10 +391,6 @@ export default function Notes() {
                   {teacher.full_name}
                 </p>
 
-                <p className="mt-1 text-xs text-slate-500">
-                  {teacher.subject ||
-                    'No Subject'}
-                </p>
               </div>
 
               {/* Add Note */}
@@ -599,10 +594,6 @@ export default function Notes() {
 
                 <br />
 
-                <span className="text-xs text-slate-500">
-                  {teacher.subject ||
-                    'No Subject'}
-                </span>
               </p>
 
               {[
