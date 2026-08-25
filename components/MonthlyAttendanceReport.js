@@ -33,6 +33,8 @@ export default function MonthlyAttendanceReport() {
   );
 
   function downloadExcel() {
+    // The current month and year are the complete report filters. All active
+    // teachers are included by the report API, so no Employee ID is requested.
     window.location.assign(
       `/api/reports/monthly?month=${month}&year=${year}&download=excel`
     );
