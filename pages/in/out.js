@@ -13,40 +13,38 @@ const time = (value) =>
         hour: '2-digit',
         minute: '2-digit',
       })
-    : 'Not marked';
+    : '—';
 
 export default function AttendanceTiming() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  async function load() {
-    try {
-      const response = await fetch('/api/attendance/today');
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-
-      setRows(
-        data.teachers.filter(
-          (teacher) => teacher.status === 'active'
-        )
-      );
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    async function load() {
+      try {
+        const response = await fetch('/api/attendance/today');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Unable to load attendance.'
+          );
+        }
+
+        setRows(
+          (data.teachers || []).filter(
+            (teacher) => teacher.status === 'active'
+          )
+        );
+      } catch (error) {
+        console.error(error);
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     load();
-
-    window.addEventListener('focus', load);
-
-    return () =>
-      window.removeEventListener('focus', load);
   }, []);
 
   return (
@@ -56,97 +54,120 @@ export default function AttendanceTiming() {
           <Link
             href="/dashboard"
             aria-label="Back to Dashboard"
-            className="flex h-7 w-7 items-center justify-center text-slate-800"
+            className="flex h-7 w-7 shrink-0 items-center justify-center text-slate-800"
           >
-            <ArrowLeft
-              size={20}
-              strokeWidth={2}
-            />
+            <ArrowLeft size={18} />
           </Link>
 
           <span>IN / OUT</span>
         </div>
       }
-      backHref={null}
     >
-      <div className="card p-5">
-        <div className="mb-5">
-          <h2 className="m-0 text-lg font-bold">
+      <div className="card w-full max-w-full overflow-hidden p-3 sm:p-4">
+
+        {/* Header */}
+        <div className="mb-3">
+          <h2 className="m-0 text-sm font-bold text-slate-800">
             Today’s Attendance
           </h2>
 
-          <p className="mb-0 mt-1 text-sm text-slate-500">
-            Timing records are marked by face verification in the Attendance.
+          <p className="mb-0 mt-1 text-[9px] text-slate-500">
+            Timing records are marked by face verification.
           </p>
         </div>
 
-        <div className="table-wrap">
-          <table>
+        {/* Table */}
+        <div className="w-full overflow-hidden">
+          <table className="w-full table-fixed border-collapse">
+
+            <colgroup>
+              {/* Name */}
+              <col className="w-[30%]" />
+
+              {/* In / Out */}
+              <col className="w-[25%]" />
+
+              {/* Working Time */}
+              <col className="w-[45%]" />
+            </colgroup>
+
             <thead>
-              <tr>
-                <th>Teacher</th>
-                <th>IN</th>
-                <th>OUT</th>
-                <th>Working Time</th>
+              <tr className="border-b border-slate-200">
+
+                {/* NAME */}
+                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
+                  Name
+                </th>
+
+                {/* IN / OUT */}
+                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
+                  In / Out
+                </th>
+
+                {/* WORKING TIME */}
+                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
+                  Working Time
+                </th>
+
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="5">
-                    Loading attendance…
+                  <td
+                    colSpan={3}
+                    className="py-4 text-center text-xs text-slate-500"
+                  >
+                    Loading attendance...
                   </td>
                 </tr>
-              ) : (
+              ) : rows.length > 0 ? (
                 rows.map((teacher) => {
                   const record = teacher.attendance;
 
-                  
-
                   return (
-                    <tr key={teacher.id}>
-                      <td>
-                        <b>{teacher.full_name}</b>
-                        <br />
+                    <tr
+                      key={teacher.id}
+                      className="border-b border-slate-100"
+                    >
 
+                      {/* NAME */}
+                      <td className="truncate m-0 p-0 py-1.5 text-[9px] font-semibold text-slate-800">
+                        {teacher.full_name || 'Unnamed teacher'}
                       </td>
 
-                      <td>
-                        {time(record?.in_time)}
+                      {/* IN / OUT */}
+                      <td className="m-0 p-0 py-1.5 text-left text-[9px] whitespace-nowrap text-slate-700">
+                        {time(record?.in_time)} / {time(record?.out_time)}
                       </td>
 
-                      <td>
-                        {time(record?.out_time)}
-                      </td>
-
-                      <td>
+                      {/* WORKING TIME */}
+                      <td className="m-0 p-0 py-1.5 text-left text-[9px] whitespace-nowrap font-medium text-slate-700">
                         {durationBetween(
                           record?.in_time,
                           record?.out_time
                         )}
                       </td>
 
-                      <td>
-                        <span
-                          className={
-                            record?.out_time
-                              ? 'text-emerald-700'
-                              : record?.in_time
-                              ? 'text-amber-700'
-                              : 'text-slate-500'
-                          }
-                        >
-                          {status}
-                        </span>
-                      </td>
                     </tr>
                   );
                 })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="py-4 text-center text-xs text-slate-500"
+                  >
+                    No active teachers found.
+                  </td>
+                </tr>
               )}
             </tbody>
+
           </table>
         </div>
+
       </div>
     </Layout>
   );

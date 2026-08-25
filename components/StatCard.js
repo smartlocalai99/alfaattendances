@@ -3,6 +3,7 @@ import {
   UserCheck,
   UserX,
   CheckCircle2,
+  MessageSquareWarning,
 } from 'lucide-react';
 
 const icons = {
@@ -10,6 +11,7 @@ const icons = {
   present: UserCheck,
   absent: UserX,
   completed: CheckCircle2,
+  complaints: MessageSquareWarning,
 };
 
 export default function StatCard({
@@ -26,6 +28,7 @@ export default function StatCard({
     present: 'bg-[#079669]',
     absent: 'bg-[#ff2451]',
     completed: 'bg-[#2f63d9]',
+    complaints: 'bg-[#d97706]',
   };
 
   return (
