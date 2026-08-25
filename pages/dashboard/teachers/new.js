@@ -5,14 +5,6 @@ import { ArrowLeft } from 'lucide-react';
 import Layout from '@/components/Layout';
 import TeacherForm from '@/components/TeacherForm';
 
-const requiredFields = [
-  'full_name',
-  'email',
-  'phone',
-  'subject',
-  'status',
-];
-
 export default function NewTeacher() {
   const router = useRouter();
   const [error, setError] = useState('');
@@ -20,24 +12,11 @@ export default function NewTeacher() {
   async function save(form) {
     setError('');
 
-    const missing = requiredFields.find(
-      (k) => String(form[k] ?? '').trim() === ''
-    );
-
-    if (missing) {
-      setError(
-        'Please complete every required teacher field before saving.'
-      );
-      return;
-    }
-
     const teacher = {
-      full_name: form.full_name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      subject: form.subject.trim(),
+      full_name: String(form.full_name || '').trim(),
+      phone: String(form.phone || '').trim(),
       monthly_salary: form.monthly_salary == null || form.monthly_salary === '' ? 0 : Number(form.monthly_salary),
-      status: form.status,
+      status: form.status || 'active',
     };
 
     if (

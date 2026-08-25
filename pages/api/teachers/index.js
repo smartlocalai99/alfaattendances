@@ -1,6 +1,6 @@
 import { admin } from '@/lib/supabaseAdmin';
 
-const requiredFields = ['full_name', 'phone',  'status'];
+const text = (value) => (value == null ? '' : String(value).trim());
 
 export default async function handler(req, res) {
   try {
@@ -18,17 +18,14 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
 
     const teacher = req.body || {};
-    const missing = requiredFields.find((field) => String(teacher[field] ?? '').trim() === '');
-    if (missing) return res.status(400).json({ error: 'Please complete every required teacher field.' });
-
     const payload = {
-      full_name: String(teacher.full_name).trim(),
-      email: String(teacher.email).trim(),
-      phone: String(teacher.phone).trim(),
+      full_name: text(teacher.full_name),
+      email: text(teacher.email),
+      phone: text(teacher.phone),
       monthly_salary: teacher.monthly_salary === null || teacher.monthly_salary === '' || teacher.monthly_salary === undefined
         ? 0
         : Number(teacher.monthly_salary),
-      status: teacher.status,
+      status: teacher.status || 'active',
     };
     if (!Number.isFinite(payload.monthly_salary) || payload.monthly_salary < 0) {
       return res.status(400).json({ error: 'Enter a valid monthly salary.' });

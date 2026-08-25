@@ -40,7 +40,6 @@ export default function TeacherForm({
 
           <input
             className="field"
-            required={k !== 'monthly_salary'}
             type={t}
             min={
               k === 'monthly_salary'
