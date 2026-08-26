@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [teachers, setTeachers] = useState([]);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [complaintCount, setComplaintCount] = useState(0);
 
   async function load() {
     try {
@@ -21,7 +22,9 @@ export default function Dashboard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to load teachers');
+        throw new Error(
+          data.error || 'Unable to load teachers'
+        );
       }
 
       setTeachers(data.teachers || []);
@@ -34,13 +37,41 @@ export default function Dashboard() {
     }
   }
 
+  async function loadComplaintCount() {
+    try {
+      const response = await fetch('/api/complaints');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Unable to load complaints'
+        );
+      }
+
+      setComplaintCount(
+        (data.complaints || []).length
+      );
+    } catch (error) {
+      console.error('Unable to load complaint count:', error);
+
+      // Keep dashboard showing 0 if complaints cannot be loaded
+      setComplaintCount(0);
+    }
+  }
+
   useEffect(() => {
     load();
+    loadComplaintCount();
 
     window.addEventListener('focus', load);
+    window.addEventListener('focus', loadComplaintCount);
 
     return () => {
       window.removeEventListener('focus', load);
+      window.removeEventListener(
+        'focus',
+        loadComplaintCount
+      );
     };
   }, []);
 
@@ -167,27 +198,27 @@ export default function Dashboard() {
           <StatCard
             type="complaints"
             label="Complaints"
-            value="View"
+            value={complaintCount}
             description="View complaints"
           />
         </Link>
       </div>
 
-      {/* Notes */}
+      {/* Complaints */}
       <section className="card mt-7 p-5 sm:p-6">
         <h2 className="m-0 text-lg font-bold">
-          Notes
+          Complaints
         </h2>
 
         <p className="mb-4 mt-1 text-sm text-slate-500">
-          Add and review teacher notes.
+          Add and review teacher complaints.
         </p>
 
         <Link
-          href="/notes"
-          className="btn-primary"
+          href="/complaints"
+          className="btn-primary block w-full text-center"
         >
-          Notes
+          Complaints
         </Link>
       </section>
 
@@ -204,7 +235,9 @@ export default function Dashboard() {
             className="field w-full max-w-xs"
             placeholder="Search teachers..."
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
           />
         </div>
 

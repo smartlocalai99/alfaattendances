@@ -63,7 +63,7 @@ export default function AttendanceTiming() {
         </div>
       }
     >
-      <div className="card w-full max-w-full overflow-hidden p-3 sm:p-4">
+      <div className="card w-full min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
 
         {/* Header */}
         <div className="mb-3">
@@ -76,98 +76,91 @@ export default function AttendanceTiming() {
           </p>
         </div>
 
-        {/* Table */}
-        <div className="w-full overflow-hidden">
-          <table className="w-full table-fixed border-collapse">
+        {/* Attendance */}
+        <div className="w-full min-w-0">
 
-            <colgroup>
-              {/* Name */}
-              <col className="w-[30%]" />
+          {/* Header Row */}
+          <div
+            className="
+              grid
+              w-full
+              grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.9fr)]
+              border-b
+              border-slate-200
+            "
+          >
+            <div className="min-w-0 py-2 pr-1 text-left text-[8px] font-semibold uppercase text-slate-500">
+              NAME
+            </div>
 
-              {/* In / Out */}
-              <col className="w-[25%]" />
+            <div className="min-w-0 py-2 px-1 text-left text-[8px] font-semibold uppercase text-slate-500">
+              IN / OUT
+            </div>
 
-              {/* Working Time */}
-              <col className="w-[45%]" />
-            </colgroup>
+            <div className="min-w-0 py-2 pl-1 text-left text-[8px] font-semibold uppercase text-slate-500">
+              WORK HR
+            </div>
+          </div>
 
-            <thead>
-              <tr className="border-b border-slate-200">
+          {/* Loading */}
+          {loading && (
+            <div className="py-4 text-center text-xs text-slate-500">
+              Loading attendance...
+            </div>
+          )}
 
-                {/* NAME */}
-                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
-                  Name
-                </th>
+          {/* Rows */}
+          {!loading && rows.length > 0 && (
+            <div className="w-full">
+              {rows.map((teacher) => {
+                const record = teacher.attendance;
 
-                {/* IN / OUT */}
-                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
-                  In / Out
-                </th>
-
-                {/* WORKING TIME */}
-                <th className="m-0 p-0 py-2 text-left text-[8px] font-semibold uppercase text-slate-500">
-                  Working Time
-                </th>
-
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td
-                    colSpan={3}
-                    className="py-4 text-center text-xs text-slate-500"
+                return (
+                  <div
+                    key={teacher.id}
+                    className="
+                      grid
+                      w-full
+                      grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,0.9fr)]
+                      border-b
+                      border-slate-100
+                    "
                   >
-                    Loading attendance...
-                  </td>
-                </tr>
-              ) : rows.length > 0 ? (
-                rows.map((teacher) => {
-                  const record = teacher.attendance;
-
-                  return (
-                    <tr
-                      key={teacher.id}
-                      className="border-b border-slate-100"
-                    >
-
-                      {/* NAME */}
-                      <td className="truncate m-0 p-0 py-1.5 text-[9px] font-semibold text-slate-800">
+                    {/* NAME */}
+                    <div className="min-w-0 overflow-hidden py-2 pr-1 text-left text-[8px] font-semibold text-slate-800">
+                      <span className="block truncate">
                         {teacher.full_name || 'Unnamed teacher'}
-                      </td>
+                      </span>
+                    </div>
 
-                      {/* IN / OUT */}
-                      <td className="m-0 p-0 py-1.5 text-left text-[9px] whitespace-nowrap text-slate-700">
-                        {time(record?.in_time)} / {time(record?.out_time)}
-                      </td>
+                    {/* IN / OUT */}
+                    <div className="min-w-0 overflow-hidden py-2 px-1 text-left text-[8px] whitespace-nowrap text-slate-700">
+                      {time(record?.in_time)} / {time(record?.out_time)}
+                    </div>
 
-                      {/* WORKING TIME */}
-                      <td className="m-0 p-0 py-1.5 text-left text-[9px] whitespace-nowrap font-medium text-slate-700">
-                        {durationBetween(
-                          record?.in_time,
-                          record?.out_time
-                        )}
-                      </td>
+                    {/* WORK HR */}
+                    <div className="min-w-0 overflow-hidden py-2 pl-1 text-left text-[8px] font-semibold whitespace-nowrap text-slate-700">
+                      {record?.in_time
+                        ? durationBetween(
+                            record.in_time,
+                            record.out_time
+                          )
+                        : '—'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan={3}
-                    className="py-4 text-center text-xs text-slate-500"
-                  >
-                    No active teachers found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
+          {/* No Data */}
+          {!loading && rows.length === 0 && (
+            <div className="py-4 text-center text-xs text-slate-500">
+              No active teachers found.
+            </div>
+          )}
 
-          </table>
         </div>
-
       </div>
     </Layout>
   );
