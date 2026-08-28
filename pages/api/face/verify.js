@@ -114,7 +114,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { faceDescriptor } = req.body;
+    const { faceDescriptor } = req.body || {};
 
     if (!isFaceDescriptor(faceDescriptor)) {
       throw new Error('Invalid face data.');
@@ -122,9 +122,9 @@ export default async function handler(req, res) {
 
     const db = admin();
 
-    /* -----------------------------
-       FIND TEACHER FACE
-    ----------------------------- */
+    /* --------------------------------
+       FIND TEACHER
+    -------------------------------- */
 
     let enrolledTeachers =
       await getEnrolledFaces();
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
       enrolledTeachers
     );
 
-    // Refresh face cache if necessary
+    /* Refresh cache if necessary */
     if (
       !match ||
       match.distance > matchThreshold()
@@ -165,9 +165,9 @@ export default async function handler(req, res) {
       });
     }
 
-    /* -----------------------------
+    /* --------------------------------
        TODAY
-    ----------------------------- */
+    -------------------------------- */
 
     const timezone =
       process.env.SCHOOL_TIMEZONE ||
@@ -180,11 +180,11 @@ export default async function handler(req, res) {
 
     const now = new Date().toISOString();
 
-    /* -----------------------------
+    /* --------------------------------
        GET ALL TODAY'S SESSIONS
-    ----------------------------- */
+    -------------------------------- */
 
-    const attendanceResult = await db
+    const existing = await db
       .from('attendance')
       .select(
         `
@@ -199,53 +199,52 @@ export default async function handler(req, res) {
         `
       )
       .eq('teacher_id', match.id)
-      .eq(
-        'attendance_date',
-        attendanceDate
-      )
+      .eq('attendance_date', attendanceDate)
       .order('in_time', {
         ascending: false,
       });
 
-    if (attendanceResult.error) {
-      throw attendanceResult.error;
+    if (existing.error) {
+      throw existing.error;
     }
 
-    const records =
-      attendanceResult.data || [];
+    const records = existing.data || [];
 
-    /* -----------------------------
-       FIND OPEN SESSION
-       
-       OPEN SESSION =
-       IN exists
-       OUT is NULL
-    ----------------------------- */
+    /*
+     * IMPORTANT
+     *
+     * Find the latest session.
+     *
+     * Example:
+     *
+     * Session 1
+     * 09:00 IN
+     * 13:00 OUT
+     *
+     * Session 2
+     * 14:00 IN
+     * 18:00 OUT
+     *
+     * If the latest session has OUT:
+     * create a NEW IN session.
+     *
+     * If the latest session has no OUT:
+     * mark OUT on that session.
+     */
 
-    const openSession = records.find(
-      (record) =>
-        record.in_time &&
-        !record.out_time
-    );
+    const latestRecord =
+      records.length > 0
+        ? records[0]
+        : null;
 
     let action;
     let result;
 
-    /* -----------------------------
-       NO OPEN SESSION
-       
-       → NEW IN
-       
-       This handles:
-       
-       First scan:
-       IN
-       
-       After lunch:
-       IN
-    ----------------------------- */
+    /* --------------------------------
+       FIRST IN
+    -------------------------------- */
 
-    if (!openSession) {
+    if (!latestRecord) {
       action = 'in';
 
       result = await db
@@ -262,13 +261,14 @@ export default async function handler(req, res) {
         .single();
     }
 
-    /* -----------------------------
-       OPEN SESSION EXISTS
-       
-       → OUT
-    ----------------------------- */
+    /* --------------------------------
+       OUT
+    -------------------------------- */
 
-    else {
+    else if (
+      latestRecord.in_time &&
+      !latestRecord.out_time
+    ) {
       action = 'out';
 
       result = await db
@@ -277,8 +277,28 @@ export default async function handler(req, res) {
           out_time: now,
           updated_at: now,
         })
-        .eq('id', openSession.id)
-        .is('out_time', null)
+        .eq('id', latestRecord.id)
+        .select()
+        .single();
+    }
+
+    /* --------------------------------
+       SECOND / NEXT IN
+    -------------------------------- */
+
+    else {
+      action = 'in';
+
+      result = await db
+        .from('attendance')
+        .insert({
+          teacher_id: match.id,
+          attendance_date: attendanceDate,
+          in_time: now,
+          out_time: null,
+          status: 'present',
+          verification_method: 'face',
+        })
         .select()
         .single();
     }
@@ -290,17 +310,11 @@ export default async function handler(req, res) {
     return res.status(200).json({
       teacher: match.full_name,
       action,
-
       attendance: result.data,
-
-      message:
-        action === 'in'
-          ? 'IN marked successfully.'
-          : 'OUT marked successfully.',
     });
   } catch (error) {
     console.error(
-      'Attendance verification error:',
+      'Face verification error:',
       error
     );
 
