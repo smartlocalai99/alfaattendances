@@ -64,7 +64,10 @@ export default function Payroll() {
 
   /* Generate Payroll */
   useEffect(() => {
-    if (!teachers.length) return;
+    if (!teachers.length) {
+      setReport([]);
+      return;
+    }
 
     async function loadPayroll() {
       setLoading(true);
@@ -75,7 +78,7 @@ export default function Payroll() {
         /*
          * Get complaints from DB.
          *
-         * Your complaints API returns:
+         * API returns:
          * id
          * teacher_name
          * complaint
@@ -114,6 +117,13 @@ export default function Payroll() {
 
               const data = await response.json();
 
+              if (!response.ok) {
+                throw new Error(
+                  data.error ||
+                    'Unable to load attendance.'
+                );
+              }
+
               const attendance =
                 data.attendance || [];
 
@@ -130,9 +140,7 @@ export default function Payroll() {
               ).length;
 
               /*
-               * Get complaints for this teacher
-               * using teacher_name because your DB
-               * does not have teacher_id.
+               * Match complaints using teacher_name.
                */
               const teacherComplaints =
                 complaintsData.filter(
@@ -150,16 +158,14 @@ export default function Payroll() {
                 );
 
               /*
-               * Get the actual complaint text
-               * from the complaints table.
+               * Get actual complaint text.
                */
               const complaintText =
                 teacherComplaints
-                  .map(
-                    (item) =>
-                      String(
-                        item.complaint || ''
-                      ).trim()
+                  .map((item) =>
+                    String(
+                      item.complaint || ''
+                    ).trim()
                   )
                   .filter(Boolean)
                   .join('; ');
@@ -190,16 +196,18 @@ export default function Payroll() {
 
                 leaves,
 
-                /*
-                 * Actual complaint text from DB
-                 */
                 complaints:
-                  complaintText || 'No complaints',
+                  complaintText ||
+                  'No complaints',
 
-                netPay: payroll.netPay || 0,
+                netPay:
+                  payroll.netPay || 0,
               };
             } catch (error) {
-              console.error(error);
+              console.error(
+                `Payroll error for ${teacher.full_name}:`,
+                error
+              );
 
               return {
                 id: teacher.id,
@@ -237,6 +245,16 @@ export default function Payroll() {
 
     loadPayroll();
   }, [teachers, month, year]);
+
+  /* Open Preview */
+  function openPreview() {
+    if (!report.length) {
+      alert('Payroll report is not ready yet.');
+      return;
+    }
+
+    setPreviewOpen(true);
+  }
 
   /* Download CSV */
   function downloadReport() {
@@ -329,9 +347,10 @@ export default function Payroll() {
           <select
             className="field"
             value={month}
-            onChange={(e) =>
-              setMonth(Number(e.target.value))
-            }
+            onChange={(e) => {
+              setMonth(Number(e.target.value));
+              setPreviewOpen(false);
+            }}
           >
             {Array.from(
               { length: 12 },
@@ -355,9 +374,10 @@ export default function Payroll() {
             className="field"
             type="number"
             value={year}
-            onChange={(e) =>
-              setYear(Number(e.target.value))
-            }
+            onChange={(e) => {
+              setYear(Number(e.target.value));
+              setPreviewOpen(false);
+            }}
           />
         </div>
 
@@ -366,8 +386,8 @@ export default function Payroll() {
           <button
             type="button"
             className="btn-primary flex items-center justify-center gap-2"
-            disabled={loading || !report.length}
-            onClick={() => setPreviewOpen(true)}
+            disabled={!report.length}
+            onClick={openPreview}
           >
             <Eye size={18} />
 
@@ -379,7 +399,7 @@ export default function Payroll() {
           <button
             type="button"
             className="btn-secondary flex items-center justify-center gap-2"
-            disabled={loading || !report.length}
+            disabled={!report.length}
             onClick={downloadReport}
           >
             <Download size={18} />
@@ -390,7 +410,7 @@ export default function Payroll() {
       </section>
 
       {/* Preview Modal */}
-      {previewOpen && (
+      {previewOpen && report.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center sm:justify-center">
           <div className="h-[85vh] w-full overflow-hidden rounded-t-3xl bg-white sm:h-auto sm:max-h-[85vh] sm:max-w-5xl sm:rounded-2xl">
 
@@ -457,7 +477,7 @@ export default function Payroll() {
                       {item.leaves}
                     </div>
 
-                    {/* Actual Complaint */}
+                    {/* Complaint Text */}
                     <div className="break-words whitespace-normal text-slate-700">
                       {item.complaints}
                     </div>
@@ -470,7 +490,6 @@ export default function Payroll() {
                     </div>
                   </div>
                 ))}
-
               </div>
             </div>
 
@@ -486,7 +505,6 @@ export default function Payroll() {
                 Download Report
               </button>
             </div>
-
           </div>
         </div>
       )}

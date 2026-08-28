@@ -9,6 +9,7 @@ import TeachersList from '@/components/TeachersList';
 export default function Dashboard() {
   const router = useRouter();
 
+  
   const [teachers, setTeachers] = useState([]);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -256,4 +257,13 @@ export default function Dashboard() {
     </Layout>
   );
 }
+
+
+
+
+
+
+
+
+
 
