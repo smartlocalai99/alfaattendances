@@ -108,8 +108,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { descriptor, loadModels } from '@/lib/faceRecognition';
 
-const RETRY_DELAY = 250;
-const INITIAL_SCAN_DELAY = 50;
+const SCAN_DELAY = 250;
+const REQUIRED_FRAMES = 3;
 
 function friendlyMessage(error) {
   const message = error?.message || 'Unable to detect a face.';
@@ -127,7 +127,11 @@ function friendlyMessage(error) {
   }
 
   if (message.includes('Face not recognized')) {
-    return 'Face Not Recognized. Look straight at the camera and try again.';
+    return 'Face Not Recognized. Please look directly at the camera.';
+  }
+
+  if (message.includes('match is not clear')) {
+    return 'Face Not Recognized. Please look directly at the camera.';
   }
 
   return message;
@@ -143,176 +147,161 @@ export default function FaceCamera({
   const stream = useRef(null);
   const timer = useRef(null);
 
-  const mountedRef = useRef(true);
   const completed = useRef(false);
   const scanning = useRef(false);
-  const verifying = useRef(false);
+  const frames = useRef([]);
 
   const [message, setMessage] = useState(
     'Starting Camera...'
   );
 
   useEffect(() => {
-    mountedRef.current = true;
-    completed.current = false;
-    scanning.current = false;
-    verifying.current = false;
-
-    async function scheduleScan(delay = RETRY_DELAY) {
-      if (!mountedRef.current) return;
-      if (completed.current) return;
-      if (verifying.current) return;
-
-      window.clearTimeout(timer.current);
-
-      timer.current = window.setTimeout(
-        scan,
-        delay
-      );
-    }
+    let mounted = true;
 
     async function scan() {
-      if (!mountedRef.current) return;
-      if (completed.current) return;
-      if (scanning.current) return;
-      if (verifying.current) return;
-
-      const currentVideo = video.current;
-
-      if (!currentVideo) {
-        scheduleScan(100);
+      if (
+        !mounted ||
+        completed.current ||
+        scanning.current
+      ) {
         return;
       }
 
       if (
-        currentVideo.readyState <
-        HTMLMediaElement.HAVE_CURRENT_DATA
+        !video.current ||
+        video.current.readyState <
+          HTMLMediaElement.HAVE_CURRENT_DATA
       ) {
-        scheduleScan(100);
+        timer.current = window.setTimeout(
+          scan,
+          100
+        );
         return;
       }
 
       scanning.current = true;
 
       try {
-        /*
-         * Get face descriptor.
-         *
-         * descriptor() should reject when:
-         * - no face
-         * - multiple faces
-         * - face is too small
-         * - face is unclear
-         */
         const faceDescriptor =
-          await descriptor(currentVideo);
+          await descriptor(video.current);
 
-        if (!mountedRef.current) return;
+        if (!mounted) return;
 
         /*
-         * Stop scanning immediately while
-         * the server verifies the face.
+         * Store several consecutive face descriptors.
+         * This prevents one bad/blurry frame from
+         * identifying the wrong person.
          */
-        verifying.current = true;
+        frames.current.push(faceDescriptor);
+
+        if (
+          frames.current.length <
+          REQUIRED_FRAMES
+        ) {
+          setMessage(
+            `Face Detected... ${frames.current.length}/${REQUIRED_FRAMES}`
+          );
+
+          return;
+        }
 
         setMessage(processingMessage);
 
         /*
-         * Send ONLY ONE request.
+         * Send all stable frames to the server.
          */
-        await onCapture(faceDescriptor);
+        const capturedFrames = [
+          ...frames.current,
+        ];
 
-        if (!mountedRef.current) return;
+        frames.current = [];
+
+        await onCapture(capturedFrames);
+
+        if (!mounted) return;
 
         completed.current = true;
         setMessage(successMessage);
       } catch (error) {
-        if (!mountedRef.current) return;
+        frames.current = [];
 
-        /*
-         * If verification failed, allow scanning
-         * again immediately.
-         */
-        verifying.current = false;
-
-        setMessage(
-          friendlyMessage(error)
-        );
-
-        scheduleScan(RETRY_DELAY);
+        if (mounted) {
+          setMessage(
+            friendlyMessage(error)
+          );
+        }
       } finally {
         scanning.current = false;
+
+        if (
+          mounted &&
+          !completed.current
+        ) {
+          timer.current =
+            window.setTimeout(
+              scan,
+              SCAN_DELAY
+            );
+        }
       }
     }
 
     async function startCamera() {
       try {
-        /*
-         * Load face models first.
-         */
         await loadModels();
 
-        if (!mountedRef.current) return;
-
-        /*
-         * Start camera.
-         */
-        stream.current =
-          await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: {
-                ideal: 'user',
-              },
-
-              width: {
-                ideal: 640,
-                min: 480,
-              },
-
-              height: {
-                ideal: 480,
-                min: 360,
-              },
-
-              frameRate: {
-                ideal: 30,
-                max: 30,
-              },
-            },
-
-            audio: false,
-          });
-
-        if (!mountedRef.current) {
-          stream.current
-            ?.getTracks()
-            .forEach((track) =>
-              track.stop()
-            );
-
-          return;
+        if (
+          !navigator.mediaDevices?.getUserMedia
+        ) {
+          throw new Error(
+            'Camera unavailable.'
+          );
         }
+
+        stream.current =
+          await navigator.mediaDevices.getUserMedia(
+            {
+              video: {
+                facingMode: 'user',
+
+                width: {
+                  ideal: 1280,
+                  min: 640,
+                },
+
+                height: {
+                  ideal: 720,
+                  min: 480,
+                },
+
+                frameRate: {
+                  ideal: 30,
+                  max: 30,
+                },
+              },
+
+              audio: false,
+            }
+          );
+
+        if (!video.current) return;
 
         video.current.srcObject =
           stream.current;
 
         await video.current.play();
 
-        if (!mountedRef.current) return;
+        if (!mounted) return;
 
         setMessage(readyMessage);
 
-        /*
-         * Start first scan immediately.
-         */
-        scheduleScan(INITIAL_SCAN_DELAY);
+        timer.current =
+          window.setTimeout(
+            scan,
+            300
+          );
       } catch (error) {
-        if (!mountedRef.current) return;
-
-        console.error(
-          'Camera error:',
-          error
-        );
+        if (!mounted) return;
 
         if (
           error?.name ===
@@ -340,7 +329,7 @@ export default function FaceCamera({
     startCamera();
 
     return () => {
-      mountedRef.current = false;
+      mounted = false;
 
       window.clearTimeout(
         timer.current
@@ -351,12 +340,6 @@ export default function FaceCamera({
         .forEach((track) => {
           track.stop();
         });
-
-      stream.current = null;
-
-      if (video.current) {
-        video.current.srcObject = null;
-      }
     };
   }, [
     onCapture,
@@ -371,7 +354,6 @@ export default function FaceCamera({
         className="face-camera__video"
         muted
         playsInline
-        autoPlay
         ref={video}
       />
 
@@ -380,11 +362,8 @@ export default function FaceCamera({
         aria-hidden="true"
       >
         <span className="face-camera__guide-corner face-camera__guide-corner--top-left" />
-
         <span className="face-camera__guide-corner face-camera__guide-corner--top-right" />
-
         <span className="face-camera__guide-corner face-camera__guide-corner--bottom-left" />
-
         <span className="face-camera__guide-corner face-camera__guide-corner--bottom-right" />
       </div>
 

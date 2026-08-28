@@ -63,7 +63,6 @@
 
 
 
-
 import { admin } from '@/lib/supabaseAdmin';
 import { getEnrolledFaces } from '@/lib/enrolledFaces';
 import {
@@ -72,72 +71,115 @@ import {
 } from '@/lib/faceDescriptor';
 
 /*
- * IMPORTANT:
+ * STRICT MATCHING
  *
- * Lower number = stricter face matching.
+ * Lower = stricter.
  *
- * 0.58 was allowing false matches.
- * 0.48 is much safer for attendance.
+ * Your .env has 0.48.
+ * We will NEVER allow a value above 0.48.
  */
-const DEFAULT_MATCH_THRESHOLD = 0.48;
+const MAX_DISTANCE = 0.48;
 
 /*
- * Minimum distance difference between the best
- * and second-best teacher.
- *
- * This prevents:
- *
- * Chinni = 0.46
- * Another = 0.47
- *
- * from being accepted because the two faces
- * are too similar/ambiguous.
+ * The best teacher must be clearly better
+ * than the second-best teacher.
  */
-const MIN_MATCH_MARGIN = 0.06;
+const MIN_MARGIN = 0.08;
 
-function getMatchThreshold() {
+/*
+ * Three camera frames are required.
+ */
+const MIN_FRAMES = 3;
+
+function getThreshold() {
   const configured = Number(
     process.env.FACE_MATCH_THRESHOLD ||
       process.env.NEXT_PUBLIC_FACE_MATCH_THRESHOLD
   );
 
   if (!Number.isFinite(configured)) {
-    return DEFAULT_MATCH_THRESHOLD;
+    return MAX_DISTANCE;
   }
 
-  /*
-   * Never allow environment settings to make
-   * matching less strict than 0.48.
-   */
   return Math.min(
     configured,
-    DEFAULT_MATCH_THRESHOLD
+    MAX_DISTANCE
   );
 }
 
-function findBestMatches(
-  faceDescriptor,
-  enrolledTeachers
-) {
-  return enrolledTeachers
-    .map((teacher) => {
-      const distance = faceDistance(
-        faceDescriptor,
-        teacher.face_descriptor
-      );
+/*
+ * Validate all descriptors.
+ */
+function validDescriptors(value) {
+  if (!Array.isArray(value)) {
+    return false;
+  }
 
-      return {
-        ...teacher,
-        distance,
-      };
-    })
+  return (
+    value.length >= MIN_FRAMES &&
+    value.every((item) =>
+      isFaceDescriptor(item)
+    )
+  );
+}
+
+/*
+ * Calculate the face distance for every frame.
+ *
+ * We use the AVERAGE distance for matching.
+ */
+function calculateTeacherMatch(
+  descriptors,
+  teacher
+) {
+  const distances = descriptors.map(
+    (item) =>
+      faceDistance(
+        item,
+        teacher.face_descriptor
+      )
+  );
+
+  const average =
+    distances.reduce(
+      (sum, value) =>
+        sum + value,
+      0
+    ) / distances.length;
+
+  const worst =
+    Math.max(...distances);
+
+  return {
+    ...teacher,
+    averageDistance: average,
+    worstDistance: worst,
+    distances,
+  };
+}
+
+function findMatches(
+  descriptors,
+  teachers
+) {
+  return teachers
+    .map((teacher) =>
+      calculateTeacherMatch(
+        descriptors,
+        teacher
+      )
+    )
     .sort(
       (a, b) =>
-        a.distance - b.distance
+        a.averageDistance -
+        b.averageDistance
     );
 }
 
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
   if (req.method !== 'POST') {
     return res.status(405).json({
       error: 'Method not allowed.',
@@ -145,24 +187,48 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { faceDescriptor } =
-      req.body || {};
+    const body = req.body || {};
 
     /*
-     * Validate incoming face descriptor.
+     * New FaceCamera sends:
+     *
+     * {
+     *   faceDescriptors: [...]
+     * }
+     *
+     * Keep support for old:
+     *
+     * {
+     *   faceDescriptor: [...]
+     * }
      */
-    if (!isFaceDescriptor(faceDescriptor)) {
+    let descriptors =
+      body.faceDescriptors;
+
+    if (
+      !Array.isArray(descriptors) &&
+      body.faceDescriptor
+    ) {
+      descriptors = [
+        body.faceDescriptor,
+      ];
+    }
+
+    if (
+      !validDescriptors(descriptors)
+    ) {
       return res.status(400).json({
-        error: 'Invalid face data.',
+        error:
+          'Please keep one clear face in the camera and try again.',
       });
     }
 
     const db = admin();
 
     /*
-     * -----------------------------------------
-     * LOAD ENROLLED TEACHERS
-     * -----------------------------------------
+     * --------------------------------
+     * LOAD ENROLLED FACES
+     * --------------------------------
      */
 
     let enrolledTeachers =
@@ -176,49 +242,36 @@ export default async function handler(req, res) {
     }
 
     /*
-     * -----------------------------------------
-     * FIND BEST FACE MATCH
-     * -----------------------------------------
+     * --------------------------------
+     * FIND BEST MATCH
+     * --------------------------------
      */
 
-    let matches = findBestMatches(
-      faceDescriptor,
+    let matches = findMatches(
+      descriptors,
       enrolledTeachers
     );
 
-    let bestMatch = matches[0];
-    let secondMatch = matches[1];
+    let best = matches[0];
+    let second = matches[1];
 
     /*
-     * Refresh face cache once.
-     *
-     * Useful immediately after enrolling
-     * a new teacher.
+     * Refresh cache once.
      */
-    if (
-      !bestMatch ||
-      bestMatch.distance >
-        getMatchThreshold()
-    ) {
+    if (!best) {
       enrolledTeachers =
         await getEnrolledFaces(true);
 
-      matches = findBestMatches(
-        faceDescriptor,
+      matches = findMatches(
+        descriptors,
         enrolledTeachers
       );
 
-      bestMatch = matches[0];
-      secondMatch = matches[1];
+      best = matches[0];
+      second = matches[1];
     }
 
-    /*
-     * -----------------------------------------
-     * STRICT FACE CHECK
-     * -----------------------------------------
-     */
-
-    if (!bestMatch) {
+    if (!best) {
       return res.status(401).json({
         error:
           'Face not recognized.',
@@ -226,21 +279,31 @@ export default async function handler(req, res) {
     }
 
     const threshold =
-      getMatchThreshold();
+      getThreshold();
 
     /*
-     * Check absolute distance.
+     * --------------------------------
+     * STRICT DISTANCE CHECK
+     * --------------------------------
+     *
+     * BOTH average and worst frame
+     * must be within the threshold.
      */
     if (
-      bestMatch.distance > threshold
+      best.averageDistance >
+        threshold ||
+      best.worstDistance >
+        threshold
     ) {
       console.warn(
-        'Face rejected - distance too high:',
+        'FACE REJECTED - distance',
         {
           teacher:
-            bestMatch.full_name,
-          distance:
-            bestMatch.distance,
+            best.full_name,
+          average:
+            best.averageDistance,
+          worst:
+            best.worstDistance,
           threshold,
         }
       );
@@ -252,43 +315,49 @@ export default async function handler(req, res) {
     }
 
     /*
-     * Check ambiguity.
-     *
-     * If another teacher's face is almost
-     * equally close, reject the match.
+     * --------------------------------
+     * AMBIGUOUS MATCH CHECK
+     * --------------------------------
      */
-    if (secondMatch) {
-      const margin =
-        secondMatch.distance -
-        bestMatch.distance;
 
-      if (margin < MIN_MATCH_MARGIN) {
+    if (second) {
+      const margin =
+        second.averageDistance -
+        best.averageDistance;
+
+      if (
+        margin < MIN_MARGIN
+      ) {
         console.warn(
-          'Face rejected - ambiguous match:',
+          'FACE REJECTED - ambiguous',
           {
             bestTeacher:
-              bestMatch.full_name,
+              best.full_name,
+
             bestDistance:
-              bestMatch.distance,
+              best.averageDistance,
+
             secondTeacher:
-              secondMatch.full_name,
+              second.full_name,
+
             secondDistance:
-              secondMatch.distance,
+              second.averageDistance,
+
             margin,
           }
         );
 
         return res.status(401).json({
           error:
-            'Face match is not clear. Please face the camera directly and try again.',
+            'Face match is not clear. Please look directly at the camera and try again.',
         });
       }
     }
 
     /*
-     * -----------------------------------------
-     * TODAY'S DATE
-     * -----------------------------------------
+     * --------------------------------
+     * TODAY
+     * --------------------------------
      */
 
     const timezone =
@@ -307,9 +376,9 @@ export default async function handler(req, res) {
       new Date().toISOString();
 
     /*
-     * -----------------------------------------
-     * LOAD ALL ATTENDANCE SESSIONS TODAY
-     * -----------------------------------------
+     * --------------------------------
+     * LOAD TODAY'S RECORDS
+     * --------------------------------
      */
 
     const existing =
@@ -329,7 +398,7 @@ export default async function handler(req, res) {
         )
         .eq(
           'teacher_id',
-          bestMatch.id
+          best.id
         )
         .eq(
           'attendance_date',
@@ -349,10 +418,7 @@ export default async function handler(req, res) {
     const records =
       existing.data || [];
 
-    /*
-     * Latest session.
-     */
-    const latestRecord =
+    const latest =
       records.length
         ? records[0]
         : null;
@@ -361,108 +427,102 @@ export default async function handler(req, res) {
     let result;
 
     /*
-     * -----------------------------------------
+     * --------------------------------
      * FIRST IN
-     * -----------------------------------------
+     * --------------------------------
      */
 
-    if (!latestRecord) {
+    if (!latest) {
       action = 'in';
 
-      result = await db
-        .from('attendance')
-        .insert({
-          teacher_id:
-            bestMatch.id,
+      result =
+        await db
+          .from('attendance')
+          .insert({
+            teacher_id:
+              best.id,
 
-          attendance_date:
-            attendanceDate,
+            attendance_date:
+              attendanceDate,
 
-          in_time: now,
+            in_time: now,
 
-          out_time: null,
+            out_time: null,
 
-          status: 'present',
+            status: 'present',
 
-          verification_method:
-            'face',
-        })
-        .select()
-        .single();
+            verification_method:
+              'face',
+          })
+          .select()
+          .single();
     }
 
     /*
-     * -----------------------------------------
+     * --------------------------------
      * OUT
-     * -----------------------------------------
+     * --------------------------------
      */
 
     else if (
-      latestRecord.in_time &&
-      !latestRecord.out_time
+      latest.in_time &&
+      !latest.out_time
     ) {
       action = 'out';
 
-      result = await db
-        .from('attendance')
-        .update({
-          out_time: now,
-          updated_at: now,
-        })
-        .eq(
-          'id',
-          latestRecord.id
-        )
-        .select()
-        .single();
+      result =
+        await db
+          .from('attendance')
+          .update({
+            out_time: now,
+            updated_at: now,
+          })
+          .eq(
+            'id',
+            latest.id
+          )
+          .select()
+          .single();
     }
 
     /*
-     * -----------------------------------------
+     * --------------------------------
      * NEXT IN
-     * -----------------------------------------
+     * --------------------------------
      *
      * Previous session already has OUT.
-     *
-     * Example:
-     *
-     * 09:00 IN
-     * 13:00 OUT
-     *
-     * Next scan:
-     *
-     * 14:00 IN
      */
 
     else {
       action = 'in';
 
-      result = await db
-        .from('attendance')
-        .insert({
-          teacher_id:
-            bestMatch.id,
+      result =
+        await db
+          .from('attendance')
+          .insert({
+            teacher_id:
+              best.id,
 
-          attendance_date:
-            attendanceDate,
+            attendance_date:
+              attendanceDate,
 
-          in_time: now,
+            in_time: now,
 
-          out_time: null,
+            out_time: null,
 
-          status: 'present',
+            status: 'present',
 
-          verification_method:
-            'face',
-        })
-        .select()
-        .single();
+            verification_method:
+              'face',
+          })
+          .select()
+          .single();
     }
 
     /*
-     * -----------------------------------------
+     * --------------------------------
      * DATABASE ERROR
-     * -----------------------------------------
+     * --------------------------------
      */
 
     if (result.error) {
@@ -471,17 +531,13 @@ export default async function handler(req, res) {
         result.error
       );
 
-      /*
-       * If the unique constraint still exists,
-       * give a clear message.
-       */
       if (
         result.error.code ===
         '23505'
       ) {
         return res.status(409).json({
           error:
-            'Attendance database still has a unique-per-day constraint. Remove the unique_teacher_attendance_per_day or unique_teacher_attendance_date constraint in Supabase.',
+            'Database still has a unique attendance-per-day constraint. Run the SQL below to remove it.',
         });
       }
 
@@ -489,14 +545,14 @@ export default async function handler(req, res) {
     }
 
     /*
-     * -----------------------------------------
+     * --------------------------------
      * SUCCESS
-     * -----------------------------------------
+     * --------------------------------
      */
 
     return res.status(200).json({
       teacher:
-        bestMatch.full_name,
+        best.full_name,
 
       action,
 
@@ -505,7 +561,7 @@ export default async function handler(req, res) {
 
       faceDistance:
         Number(
-          bestMatch.distance.toFixed(
+          best.averageDistance.toFixed(
             4
           )
         ),
@@ -523,3 +579,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
