@@ -52,9 +52,11 @@ export default function Dashboard() {
         (data.complaints || []).length
       );
     } catch (error) {
-      console.error('Unable to load complaint count:', error);
+      console.error(
+        'Unable to load complaint count:',
+        error
+      );
 
-      // Keep dashboard showing 0 if complaints cannot be loaded
       setComplaintCount(0);
     }
   }
@@ -100,6 +102,7 @@ export default function Dashboard() {
   ).length;
 
   // Update teacher after face enrollment
+  // Keeps the status as "Enrolled Face"
   const updateTeacher = (updated) => {
     setTeachers((current) =>
       current.map((teacher) =>
@@ -253,3 +256,4 @@ export default function Dashboard() {
     </Layout>
   );
 }
+
