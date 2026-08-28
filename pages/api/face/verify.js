@@ -84,20 +84,26 @@ function matchThreshold() {
     : defaultMatchThreshold;
 }
 
-function closestMatch(faceDescriptor, enrolledTeachers) {
-  return enrolledTeachers.reduce((match, teacher) => {
-    const value = faceDistance(
-      faceDescriptor,
-      teacher.face_descriptor
-    );
+function closestMatch(
+  faceDescriptor,
+  enrolledTeachers
+) {
+  return enrolledTeachers.reduce(
+    (match, teacher) => {
+      const value = faceDistance(
+        faceDescriptor,
+        teacher.face_descriptor
+      );
 
-    return !match || value < match.distance
-      ? {
-          ...teacher,
-          distance: value,
-        }
-      : match;
-  }, null);
+      return !match || value < match.distance
+        ? {
+            ...teacher,
+            distance: value,
+          }
+        : match;
+    },
+    null
+  );
 }
 
 export default async function handler(req, res) {
@@ -116,23 +122,25 @@ export default async function handler(req, res) {
 
     const db = admin();
 
-    /* -----------------------------------------
-       FIND MATCHING TEACHER
-    ----------------------------------------- */
+    /* -----------------------------
+       FIND TEACHER FACE
+    ----------------------------- */
 
-    let enrolledTeachers = await getEnrolledFaces();
+    let enrolledTeachers =
+      await getEnrolledFaces();
 
     let match = closestMatch(
       faceDescriptor,
       enrolledTeachers
     );
 
-    // Refresh cache if required
+    // Refresh face cache if necessary
     if (
       !match ||
       match.distance > matchThreshold()
     ) {
-      enrolledTeachers = await getEnrolledFaces(true);
+      enrolledTeachers =
+        await getEnrolledFaces(true);
 
       match = closestMatch(
         faceDescriptor,
@@ -157,9 +165,9 @@ export default async function handler(req, res) {
       });
     }
 
-    /* -----------------------------------------
-       TODAY'S DATE
-    ----------------------------------------- */
+    /* -----------------------------
+       TODAY
+    ----------------------------- */
 
     const timezone =
       process.env.SCHOOL_TIMEZONE ||
@@ -172,9 +180,9 @@ export default async function handler(req, res) {
 
     const now = new Date().toISOString();
 
-    /* -----------------------------------------
-       GET ALL TODAY'S RECORDS
-    ----------------------------------------- */
+    /* -----------------------------
+       GET ALL TODAY'S SESSIONS
+    ----------------------------- */
 
     const attendanceResult = await db
       .from('attendance')
@@ -191,7 +199,10 @@ export default async function handler(req, res) {
         `
       )
       .eq('teacher_id', match.id)
-      .eq('attendance_date', attendanceDate)
+      .eq(
+        'attendance_date',
+        attendanceDate
+      )
       .order('in_time', {
         ascending: false,
       });
@@ -203,19 +214,13 @@ export default async function handler(req, res) {
     const records =
       attendanceResult.data || [];
 
-    /* -----------------------------------------
+    /* -----------------------------
        FIND OPEN SESSION
        
-       Open session means:
-       
+       OPEN SESSION =
        IN exists
-       OUT does not exist
-       
-       Example:
-       09:00 IN
-       13:00 OUT
-       14:00 IN  <-- open session
-    ----------------------------------------- */
+       OUT is NULL
+    ----------------------------- */
 
     const openSession = records.find(
       (record) =>
@@ -226,16 +231,19 @@ export default async function handler(req, res) {
     let action;
     let result;
 
-    /* -----------------------------------------
-       CASE 1
+    /* -----------------------------
        NO OPEN SESSION
-
-       Either:
-       - First scan of the day
-       - Previous session already OUT
-
-       Therefore CREATE NEW IN
-    ----------------------------------------- */
+       
+       → NEW IN
+       
+       This handles:
+       
+       First scan:
+       IN
+       
+       After lunch:
+       IN
+    ----------------------------- */
 
     if (!openSession) {
       action = 'in';
@@ -254,17 +262,11 @@ export default async function handler(req, res) {
         .single();
     }
 
-    /* -----------------------------------------
-       CASE 2
+    /* -----------------------------
        OPEN SESSION EXISTS
-
-       Current session is:
-
-       IN = present
-       OUT = null
-
-       Therefore this scan marks OUT.
-    ----------------------------------------- */
+       
+       → OUT
+    ----------------------------- */
 
     else {
       action = 'out';
@@ -285,13 +287,10 @@ export default async function handler(req, res) {
       throw result.error;
     }
 
-    /* -----------------------------------------
-       RETURN RESULT
-    ----------------------------------------- */
-
     return res.status(200).json({
       teacher: match.full_name,
       action,
+
       attendance: result.data,
 
       message:
