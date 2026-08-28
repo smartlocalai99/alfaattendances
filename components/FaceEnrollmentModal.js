@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import FaceCamera from '@/components/FaceCamera';
 
 export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete, onSaved }) {
-  const [faceDescriptor, setFaceDescriptor] = useState(null);
+  const [faceDescriptors, setFaceDescriptors] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -14,14 +14,14 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
   }, [done, onComplete]);
 
   async function saveFace() {
-    if (!faceDescriptor || saving) return;
+    if (!faceDescriptors || saving) return;
     setSaving(true);
     setError('');
     try {
       const response = await fetch('/api/face/enroll', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacherId, faceDescriptor }),
+        body: JSON.stringify({ teacherId, faceDescriptors }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to save the face.');
@@ -46,13 +46,13 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
         ) : (
           <>
             <FaceCamera
-              onCapture={setFaceDescriptor}
+              onCapture={setFaceDescriptors}
               readyMessage="Detecting Face..."
               processingMessage="Verifying..."
               successMessage="Face detected. Ready to save."
             />
             {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-            <button className="btn-primary mt-4 w-full" disabled={!faceDescriptor || saving} onClick={saveFace}>
+            <button className="btn-primary mt-4 w-full" disabled={!faceDescriptors || saving} onClick={saveFace}>
               {saving ? 'Saving...' : 'Save Face'}
             </button>
           </>

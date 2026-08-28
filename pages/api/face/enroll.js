@@ -4,12 +4,33 @@ import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
 
 const duplicateThreshold = Number(process.env.FACE_DUPLICATE_THRESHOLD || 0.42);
 
+function enrollmentDescriptor(body) {
+  const supplied = body.faceDescriptors || body.faceDescriptor;
+  const descriptors = isFaceDescriptor(supplied)
+    ? [supplied]
+    : Array.isArray(supplied) && supplied.every(isFaceDescriptor)
+      ? supplied
+      : null;
+
+  if (!descriptors?.length) return null;
+
+  const averaged = descriptors[0].map((_, index) =>
+    descriptors.reduce((sum, descriptor) => sum + descriptor[index], 0) / descriptors.length
+  );
+  const magnitude = Math.hypot(...averaged);
+
+  return magnitude > 0
+    ? averaged.map((value) => value / magnitude)
+    : null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
   try {
     const db = admin();
-    const { teacherId, faceDescriptor } = req.body;
-    if (!teacherId || !isFaceDescriptor(faceDescriptor)) throw new Error('Invalid enrollment data.');
+    const { teacherId } = req.body || {};
+    const faceDescriptor = enrollmentDescriptor(req.body || {});
+    if (!teacherId || !faceDescriptor) throw new Error('Invalid enrollment data.');
 
     const target = await db.from('teachers').select('id,full_name,face_descriptor').eq('id', teacherId).maybeSingle();
     if (target.error) throw target.error;

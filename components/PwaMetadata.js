@@ -10,11 +10,11 @@ export default function PwaMetadata({ name, manifest, serviceWorker, scope }) {
 
   return (
     <Head>
-      <title>{name}</title>
+      {name && <title>{name}</title>}
       <meta name="theme-color" content="#047857" />
       <meta name="mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-title" content={name} />
+      <meta name="apple-mobile-web-app-title" content={name || 'Alfa Attendance'} />
       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       <link rel="manifest" href={manifest} />
       <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />

@@ -5,6 +5,10 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/pwa-sw.js',
+        headers: [{ key: 'Service-Worker-Allowed', value: '/' }],
+      },
+      {
         source: '/dashboard/pwa-sw.js',
         headers: [{ key: 'Service-Worker-Allowed', value: '/dashboard' }],
       },

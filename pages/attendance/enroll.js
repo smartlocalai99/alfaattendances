@@ -20,9 +20,9 @@ export default function EnrollFace() {
     }).then(setTeacher).catch((error) => setLoadError(error.message));
   }, [router.isReady, router.query.teacherId]);
 
-  async function enroll(faceDescriptor) {
+  async function enroll(faceDescriptors) {
     if (!teacher?.id) throw new Error('Teacher details are still loading. Please try again.');
-    const response = await fetch('/api/face/enroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teacherId: teacher.id, faceDescriptor }) });
+    const response = await fetch('/api/face/enroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teacherId: teacher.id, faceDescriptors }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
     setDone(true);

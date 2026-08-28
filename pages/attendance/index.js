@@ -146,7 +146,7 @@ export default function AttendanceKiosk() {
   }, [loadActivity]);
 
   const verify = useCallback(
-    async (faceDescriptor) => {
+    async (faceDescriptors) => {
       try {
         const response = await fetch(
           '/api/face/verify',
@@ -155,9 +155,7 @@ export default function AttendanceKiosk() {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              faceDescriptor,
-            }),
+            body: JSON.stringify({ faceDescriptors }),
           }
         );
 
