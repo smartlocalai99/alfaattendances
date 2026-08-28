@@ -179,6 +179,10 @@ export default function AttendanceKiosk() {
             error.message ||
             'Unable to verify attendance.',
         });
+
+        // FaceCamera must receive the rejection so it does not show a
+        // successful "Face Recognized" state for a failed API match.
+        throw error;
       }
     },
     [loadActivity]

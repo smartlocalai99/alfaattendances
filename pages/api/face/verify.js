@@ -75,10 +75,13 @@ import {
  *
  * Lower = stricter.
  *
- * Your .env has 0.48.
- * We will NEVER allow a value above 0.48.
+ * 0.48 is too strict for descriptors captured from different
+ * mobile-camera frames. The average match must remain strong,
+ * while one slightly blurry frame is allowed a small tolerance.
  */
-const MAX_DISTANCE = 0.48;
+const DEFAULT_MATCH_DISTANCE = 0.55;
+const MAX_MATCH_DISTANCE = 0.60;
+const MAX_FRAME_DISTANCE = 0.65;
 
 /*
  * The best teacher must be clearly better
@@ -98,13 +101,10 @@ function getThreshold() {
   );
 
   if (!Number.isFinite(configured)) {
-    return MAX_DISTANCE;
+    return DEFAULT_MATCH_DISTANCE;
   }
 
-  return Math.min(
-    configured,
-    MAX_DISTANCE
-  );
+  return Math.min(Math.max(configured, 0.45), MAX_MATCH_DISTANCE);
 }
 
 /*
@@ -286,14 +286,15 @@ export default async function handler(
      * STRICT DISTANCE CHECK
      * --------------------------------
      *
-     * BOTH average and worst frame
-     * must be within the threshold.
+     * The average must be within the configured threshold. A single
+     * low-quality live frame may be a little farther away, but never
+     * beyond the hard per-frame safety limit.
      */
     if (
       best.averageDistance >
         threshold ||
       best.worstDistance >
-        threshold
+        MAX_FRAME_DISTANCE
     ) {
       console.warn(
         'FACE REJECTED - distance',
@@ -579,4 +580,3 @@ export default async function handler(
     });
   }
 }
-
