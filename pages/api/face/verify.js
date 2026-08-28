@@ -71,39 +71,70 @@ import {
   isFaceDescriptor,
 } from '@/lib/faceDescriptor';
 
-const defaultMatchThreshold = 0.58;
+/*
+ * IMPORTANT:
+ *
+ * Lower number = stricter face matching.
+ *
+ * 0.58 was allowing false matches.
+ * 0.48 is much safer for attendance.
+ */
+const DEFAULT_MATCH_THRESHOLD = 0.48;
 
-function matchThreshold() {
+/*
+ * Minimum distance difference between the best
+ * and second-best teacher.
+ *
+ * This prevents:
+ *
+ * Chinni = 0.46
+ * Another = 0.47
+ *
+ * from being accepted because the two faces
+ * are too similar/ambiguous.
+ */
+const MIN_MATCH_MARGIN = 0.06;
+
+function getMatchThreshold() {
   const configured = Number(
     process.env.FACE_MATCH_THRESHOLD ||
       process.env.NEXT_PUBLIC_FACE_MATCH_THRESHOLD
   );
 
-  return Number.isFinite(configured)
-    ? Math.max(configured, defaultMatchThreshold)
-    : defaultMatchThreshold;
+  if (!Number.isFinite(configured)) {
+    return DEFAULT_MATCH_THRESHOLD;
+  }
+
+  /*
+   * Never allow environment settings to make
+   * matching less strict than 0.48.
+   */
+  return Math.min(
+    configured,
+    DEFAULT_MATCH_THRESHOLD
+  );
 }
 
-function closestMatch(
+function findBestMatches(
   faceDescriptor,
   enrolledTeachers
 ) {
-  return enrolledTeachers.reduce(
-    (match, teacher) => {
-      const value = faceDistance(
+  return enrolledTeachers
+    .map((teacher) => {
+      const distance = faceDistance(
         faceDescriptor,
         teacher.face_descriptor
       );
 
-      return !match || value < match.distance
-        ? {
-            ...teacher,
-            distance: value,
-          }
-        : match;
-    },
-    null
-  );
+      return {
+        ...teacher,
+        distance,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.distance - b.distance
+    );
 }
 
 export default async function handler(req, res) {
@@ -114,39 +145,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { faceDescriptor } = req.body || {};
+    const { faceDescriptor } =
+      req.body || {};
 
+    /*
+     * Validate incoming face descriptor.
+     */
     if (!isFaceDescriptor(faceDescriptor)) {
-      throw new Error('Invalid face data.');
+      return res.status(400).json({
+        error: 'Invalid face data.',
+      });
     }
 
     const db = admin();
 
-    /* --------------------------------
-       FIND TEACHER
-    -------------------------------- */
+    /*
+     * -----------------------------------------
+     * LOAD ENROLLED TEACHERS
+     * -----------------------------------------
+     */
 
     let enrolledTeachers =
       await getEnrolledFaces();
-
-    let match = closestMatch(
-      faceDescriptor,
-      enrolledTeachers
-    );
-
-    /* Refresh cache if necessary */
-    if (
-      !match ||
-      match.distance > matchThreshold()
-    ) {
-      enrolledTeachers =
-        await getEnrolledFaces(true);
-
-      match = closestMatch(
-        faceDescriptor,
-        enrolledTeachers
-      );
-    }
 
     if (!enrolledTeachers.length) {
       return res.status(401).json({
@@ -155,94 +175,196 @@ export default async function handler(req, res) {
       });
     }
 
+    /*
+     * -----------------------------------------
+     * FIND BEST FACE MATCH
+     * -----------------------------------------
+     */
+
+    let matches = findBestMatches(
+      faceDescriptor,
+      enrolledTeachers
+    );
+
+    let bestMatch = matches[0];
+    let secondMatch = matches[1];
+
+    /*
+     * Refresh face cache once.
+     *
+     * Useful immediately after enrolling
+     * a new teacher.
+     */
     if (
-      !match ||
-      match.distance > matchThreshold()
+      !bestMatch ||
+      bestMatch.distance >
+        getMatchThreshold()
     ) {
+      enrolledTeachers =
+        await getEnrolledFaces(true);
+
+      matches = findBestMatches(
+        faceDescriptor,
+        enrolledTeachers
+      );
+
+      bestMatch = matches[0];
+      secondMatch = matches[1];
+    }
+
+    /*
+     * -----------------------------------------
+     * STRICT FACE CHECK
+     * -----------------------------------------
+     */
+
+    if (!bestMatch) {
       return res.status(401).json({
         error:
-          'Face not recognized. Use a clear, front-facing view or update the enrolled face.',
+          'Face not recognized.',
       });
     }
 
-    /* --------------------------------
-       TODAY
-    -------------------------------- */
+    const threshold =
+      getMatchThreshold();
+
+    /*
+     * Check absolute distance.
+     */
+    if (
+      bestMatch.distance > threshold
+    ) {
+      console.warn(
+        'Face rejected - distance too high:',
+        {
+          teacher:
+            bestMatch.full_name,
+          distance:
+            bestMatch.distance,
+          threshold,
+        }
+      );
+
+      return res.status(401).json({
+        error:
+          'Face not recognized. Please look directly at the camera and try again.',
+      });
+    }
+
+    /*
+     * Check ambiguity.
+     *
+     * If another teacher's face is almost
+     * equally close, reject the match.
+     */
+    if (secondMatch) {
+      const margin =
+        secondMatch.distance -
+        bestMatch.distance;
+
+      if (margin < MIN_MATCH_MARGIN) {
+        console.warn(
+          'Face rejected - ambiguous match:',
+          {
+            bestTeacher:
+              bestMatch.full_name,
+            bestDistance:
+              bestMatch.distance,
+            secondTeacher:
+              secondMatch.full_name,
+            secondDistance:
+              secondMatch.distance,
+            margin,
+          }
+        );
+
+        return res.status(401).json({
+          error:
+            'Face match is not clear. Please face the camera directly and try again.',
+        });
+      }
+    }
+
+    /*
+     * -----------------------------------------
+     * TODAY'S DATE
+     * -----------------------------------------
+     */
 
     const timezone =
       process.env.SCHOOL_TIMEZONE ||
       'Asia/Kolkata';
 
     const attendanceDate =
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-      }).format(new Date());
+      new Intl.DateTimeFormat(
+        'en-CA',
+        {
+          timeZone: timezone,
+        }
+      ).format(new Date());
 
-    const now = new Date().toISOString();
+    const now =
+      new Date().toISOString();
 
-    /* --------------------------------
-       GET ALL TODAY'S SESSIONS
-    -------------------------------- */
+    /*
+     * -----------------------------------------
+     * LOAD ALL ATTENDANCE SESSIONS TODAY
+     * -----------------------------------------
+     */
 
-    const existing = await db
-      .from('attendance')
-      .select(
-        `
-        id,
-        teacher_id,
-        attendance_date,
-        in_time,
-        out_time,
-        status,
-        verification_method,
-        updated_at
-        `
-      )
-      .eq('teacher_id', match.id)
-      .eq('attendance_date', attendanceDate)
-      .order('in_time', {
-        ascending: false,
-      });
+    const existing =
+      await db
+        .from('attendance')
+        .select(
+          `
+          id,
+          teacher_id,
+          attendance_date,
+          in_time,
+          out_time,
+          status,
+          verification_method,
+          updated_at
+          `
+        )
+        .eq(
+          'teacher_id',
+          bestMatch.id
+        )
+        .eq(
+          'attendance_date',
+          attendanceDate
+        )
+        .order(
+          'in_time',
+          {
+            ascending: false,
+          }
+        );
 
     if (existing.error) {
       throw existing.error;
     }
 
-    const records = existing.data || [];
+    const records =
+      existing.data || [];
 
     /*
-     * IMPORTANT
-     *
-     * Find the latest session.
-     *
-     * Example:
-     *
-     * Session 1
-     * 09:00 IN
-     * 13:00 OUT
-     *
-     * Session 2
-     * 14:00 IN
-     * 18:00 OUT
-     *
-     * If the latest session has OUT:
-     * create a NEW IN session.
-     *
-     * If the latest session has no OUT:
-     * mark OUT on that session.
+     * Latest session.
      */
-
     const latestRecord =
-      records.length > 0
+      records.length
         ? records[0]
         : null;
 
     let action;
     let result;
 
-    /* --------------------------------
-       FIRST IN
-    -------------------------------- */
+    /*
+     * -----------------------------------------
+     * FIRST IN
+     * -----------------------------------------
+     */
 
     if (!latestRecord) {
       action = 'in';
@@ -250,20 +372,30 @@ export default async function handler(req, res) {
       result = await db
         .from('attendance')
         .insert({
-          teacher_id: match.id,
-          attendance_date: attendanceDate,
+          teacher_id:
+            bestMatch.id,
+
+          attendance_date:
+            attendanceDate,
+
           in_time: now,
+
           out_time: null,
+
           status: 'present',
-          verification_method: 'face',
+
+          verification_method:
+            'face',
         })
         .select()
         .single();
     }
 
-    /* --------------------------------
-       OUT
-    -------------------------------- */
+    /*
+     * -----------------------------------------
+     * OUT
+     * -----------------------------------------
+     */
 
     else if (
       latestRecord.in_time &&
@@ -277,14 +409,30 @@ export default async function handler(req, res) {
           out_time: now,
           updated_at: now,
         })
-        .eq('id', latestRecord.id)
+        .eq(
+          'id',
+          latestRecord.id
+        )
         .select()
         .single();
     }
 
-    /* --------------------------------
-       SECOND / NEXT IN
-    -------------------------------- */
+    /*
+     * -----------------------------------------
+     * NEXT IN
+     * -----------------------------------------
+     *
+     * Previous session already has OUT.
+     *
+     * Example:
+     *
+     * 09:00 IN
+     * 13:00 OUT
+     *
+     * Next scan:
+     *
+     * 14:00 IN
+     */
 
     else {
       action = 'in';
@@ -292,25 +440,75 @@ export default async function handler(req, res) {
       result = await db
         .from('attendance')
         .insert({
-          teacher_id: match.id,
-          attendance_date: attendanceDate,
+          teacher_id:
+            bestMatch.id,
+
+          attendance_date:
+            attendanceDate,
+
           in_time: now,
+
           out_time: null,
+
           status: 'present',
-          verification_method: 'face',
+
+          verification_method:
+            'face',
         })
         .select()
         .single();
     }
 
+    /*
+     * -----------------------------------------
+     * DATABASE ERROR
+     * -----------------------------------------
+     */
+
     if (result.error) {
+      console.error(
+        'Attendance database error:',
+        result.error
+      );
+
+      /*
+       * If the unique constraint still exists,
+       * give a clear message.
+       */
+      if (
+        result.error.code ===
+        '23505'
+      ) {
+        return res.status(409).json({
+          error:
+            'Attendance database still has a unique-per-day constraint. Remove the unique_teacher_attendance_per_day or unique_teacher_attendance_date constraint in Supabase.',
+        });
+      }
+
       throw result.error;
     }
 
+    /*
+     * -----------------------------------------
+     * SUCCESS
+     * -----------------------------------------
+     */
+
     return res.status(200).json({
-      teacher: match.full_name,
+      teacher:
+        bestMatch.full_name,
+
       action,
-      attendance: result.data,
+
+      attendance:
+        result.data,
+
+      faceDistance:
+        Number(
+          bestMatch.distance.toFixed(
+            4
+          )
+        ),
     });
   } catch (error) {
     console.error(
