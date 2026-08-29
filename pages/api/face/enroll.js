@@ -1,28 +1,12 @@
 import { admin } from '@/lib/supabaseAdmin';
 import { clearEnrolledFacesCache } from '@/lib/enrolledFaces';
-import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
-
-const duplicateThreshold = Number(process.env.FACE_DUPLICATE_THRESHOLD || 0.42);
-
-function enrollmentDescriptor(body) {
-  const supplied = body.faceDescriptors || body.faceDescriptor;
-  const descriptors = isFaceDescriptor(supplied)
-    ? [supplied]
-    : Array.isArray(supplied) && supplied.every(isFaceDescriptor)
-      ? supplied
-      : null;
-
-  if (!descriptors?.length) return null;
-
-  const averaged = descriptors[0].map((_, index) =>
-    descriptors.reduce((sum, descriptor) => sum + descriptor[index], 0) / descriptors.length
-  );
-  const magnitude = Math.hypot(...averaged);
-
-  return magnitude > 0
-    ? averaged.map((value) => value / magnitude)
-    : null;
-}
+import { isFaceDescriptor } from '@/lib/faceDescriptor';
+import {
+  closestDifferentTeacherMatch,
+  duplicateFaceThreshold,
+  enrollmentDescriptor,
+  isConfirmedDuplicate,
+} from '@/lib/faceEnrollment';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -37,13 +21,27 @@ export default async function handler(req, res) {
     if (!target.data) return res.status(404).json({ error: 'The selected teacher was not found.' });
 
     const alreadyEnrolled = isFaceDescriptor(target.data.face_descriptor);
-    const existingFaces = await db.from('teachers').select('id,face_descriptor').neq('id', teacherId);
+    const existingFaces = await db.from('teachers').select('id,full_name,face_descriptor');
     if (existingFaces.error) throw existingFaces.error;
-    const duplicate = (existingFaces.data || []).some((teacher) =>
-      isFaceDescriptor(teacher.face_descriptor)
-      && faceDistance(faceDescriptor, teacher.face_descriptor) <= duplicateThreshold
-    );
-    if (duplicate) return res.status(409).json({ error: 'This face is linked to a different teacher. Select the correct teacher or use a different face.' });
+    const match = closestDifferentTeacherMatch(faceDescriptor, existingFaces.data || [], teacherId);
+    const duplicate = isConfirmedDuplicate(match);
+
+    console.info('Face enrollment duplicate check', {
+      selectedTeacherId: teacherId,
+      matchedTeacherId: match?.id || null,
+      matchedTeacherName: match?.fullName || null,
+      similarityScore: match ? Number(match.distance.toFixed(4)) : null,
+      duplicateThreshold: duplicateFaceThreshold(),
+      duplicate,
+    });
+
+    if (duplicate) {
+      return res.status(409).json({
+        error: `This face is already linked to ${match.fullName}. Select the correct teacher or use a different face.`,
+        code: 'DUPLICATE_FACE',
+        match: { id: match.id, fullName: match.fullName, similarityScore: Number(match.distance.toFixed(4)) },
+      });
+    }
 
     const saved = await db
       .from('teachers')

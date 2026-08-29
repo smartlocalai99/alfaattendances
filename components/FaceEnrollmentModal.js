@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import FaceCamera from '@/components/FaceCamera';
 
 export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete, onSaved }) {
   const [faceDescriptors, setFaceDescriptors] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
@@ -13,8 +15,32 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
     return () => window.clearTimeout(redirect);
   }, [done, onComplete]);
 
+  const checkDuplicate = useCallback(async (capturedDescriptors) => {
+    setFaceDescriptors(capturedDescriptors);
+    setDuplicateMatch(null);
+    setError('');
+    setCheckingDuplicate(true);
+
+    try {
+      const response = await fetch('/api/face/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId, faceDescriptors: capturedDescriptors }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to validate the face.');
+      setDuplicateMatch(data.duplicate ? data.match : null);
+    } catch (checkError) {
+      setFaceDescriptors(null);
+      setError(checkError.message);
+      throw checkError;
+    } finally {
+      setCheckingDuplicate(false);
+    }
+  }, [teacherId]);
+
   async function saveFace() {
-    if (!faceDescriptors || saving) return;
+    if (!faceDescriptors || saving || checkingDuplicate || duplicateMatch) return;
     setSaving(true);
     setError('');
     try {
@@ -24,8 +50,13 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
         body: JSON.stringify({ teacherId, faceDescriptors }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to save the face.');
+      if (!response.ok) {
+        if (data.code === 'DUPLICATE_FACE') setDuplicateMatch(data.match);
+        throw new Error(data.error || 'Unable to save the face.');
+      }
       onSaved?.(data.teacher);
+      setDuplicateMatch(null);
+      setError('');
       setDone(true);
     } catch (saveError) {
       setError(saveError.message);
@@ -46,14 +77,16 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
         ) : (
           <>
             <FaceCamera
-              onCapture={setFaceDescriptors}
+              onCapture={checkDuplicate}
               readyMessage="Detecting Face..."
               processingMessage="Verifying..."
               successMessage="Face detected. Ready to save."
             />
-            {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-            <button className="btn-primary mt-4 w-full" disabled={!faceDescriptors || saving} onClick={saveFace}>
-              {saving ? 'Saving...' : 'Save Face'}
+            {duplicateMatch ? (
+              <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">This face is already linked to {duplicateMatch.fullName}. Select the correct teacher or use a different face.</p>
+            ) : error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+            <button className="btn-primary mt-4 w-full" disabled={!faceDescriptors || saving || checkingDuplicate || Boolean(duplicateMatch)} onClick={saveFace}>
+              {checkingDuplicate ? 'Checking face...' : saving ? 'Saving...' : 'Save Face'}
             </button>
           </>
         )}
