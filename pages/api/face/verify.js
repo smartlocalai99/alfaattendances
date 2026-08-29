@@ -24,7 +24,10 @@ function getThreshold() {
     return DEFAULT_MATCH_DISTANCE;
   }
 
-  return Math.min(Math.max(configured, 0.45), MAX_MATCH_DISTANCE);
+  return Math.min(
+    Math.max(configured, DEFAULT_MATCH_DISTANCE),
+    MAX_MATCH_DISTANCE
+  );
 }
 
 
@@ -90,6 +93,14 @@ function findMatches(
     );
 }
 
+function isWithinMatchLimits(match, threshold) {
+  return Boolean(
+    match &&
+      match.averageDistance <= threshold &&
+      match.worstDistance <= MAX_FRAME_DISTANCE
+  );
+}
+
 export default async function handler(
   req,
   res
@@ -103,7 +114,6 @@ export default async function handler(
   try {
     const body = req.body || {};
 
-    
     let descriptors =
       body.faceDescriptors;
 
@@ -128,7 +138,6 @@ export default async function handler(
     const db = admin();
 
     
-
     let enrolledTeachers =
       await getEnrolledFaces();
 
@@ -139,7 +148,6 @@ export default async function handler(
       });
     }
 
-   
     let matches = findMatches(
       descriptors,
       enrolledTeachers
@@ -148,8 +156,12 @@ export default async function handler(
     let best = matches[0];
     let second = matches[1];
 
-    
-    if (!best) {
+    const threshold = getThreshold();
+
+    // Enrollment clears the cache in the request that saves the face, but
+    // another server instance may still have the old descriptor briefly.
+    // Refresh once whenever the first candidate is missing or rejected.
+    if (!isWithinMatchLimits(best, threshold)) {
       enrolledTeachers =
         await getEnrolledFaces(true);
 
@@ -169,16 +181,7 @@ export default async function handler(
       });
     }
 
-    const threshold =
-      getThreshold();
-
-   
-    if (
-      best.averageDistance >
-        threshold ||
-      best.worstDistance >
-        MAX_FRAME_DISTANCE
-    ) {
+    if (!isWithinMatchLimits(best, threshold)) {
       console.warn(
         'FACE REJECTED - distance',
         {
