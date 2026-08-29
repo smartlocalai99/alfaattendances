@@ -384,12 +384,16 @@ export default function AttendanceTiming() {
                  * it into an array.
                  */
                 const records = Array.isArray(
-                  teacher.attendance
+                  teacher.attendanceRecords
                 )
-                  ? teacher.attendance
-                  : teacher.attendance
-                    ? [teacher.attendance]
-                    : [];
+                  ? teacher.attendanceRecords
+                  : Array.isArray(
+                    teacher.attendance
+                  )
+                    ? teacher.attendance
+                    : teacher.attendance
+                      ? [teacher.attendance]
+                      : [];
 
                 return (
                   <div

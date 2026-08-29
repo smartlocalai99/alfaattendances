@@ -92,14 +92,14 @@ export default function Dashboard() {
 
   const present = teachers.filter(
     (teacher) =>
-      teacher.attendance?.in_time &&
-      !teacher.attendance?.out_time
+      teacher.status === 'active' &&
+      teacher.attendance?.in_time
   ).length;
 
   const absent = teachers.filter(
     (teacher) =>
       teacher.status === 'active' &&
-      !teacher.attendance
+      !teacher.attendance?.in_time
   ).length;
 
   // Update teacher after face enrollment
@@ -181,7 +181,7 @@ export default function Dashboard() {
           type="present"
           label="Present"
           value={present}
-          description={`${present} still on site`}
+          description="Checked in today"
         />
 
         {/* Absent */}
@@ -257,8 +257,6 @@ export default function Dashboard() {
     </Layout>
   );
 }
-
-
 
 
 

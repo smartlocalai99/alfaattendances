@@ -284,15 +284,15 @@ export default async function handler(req, res) {
         face_descriptor,
         ...teacher
       }) => {
-        const attendance =
+        const attendanceRecords =
           attendanceByTeacher.get(
             teacher.id
           ) || [];
 
         const lastRecord =
-          attendance.length
-            ? attendance[
-                attendance.length - 1
+          attendanceRecords.length
+            ? attendanceRecords[
+                attendanceRecords.length - 1
               ]
             : null;
 
@@ -303,7 +303,7 @@ export default async function handler(req, res) {
           );
 
         const completedSessions =
-          attendance.filter(
+          attendanceRecords.filter(
             (item) =>
               item.in_time &&
               item.out_time
@@ -317,7 +317,12 @@ export default async function handler(req, res) {
               face_descriptor
             ),
 
-          attendance,
+          // Dashboard consumers need one record object so that
+          // attendance.in_time represents today's latest check-in.
+          attendance: lastRecord,
+
+          // Keep every same-day session available to timing views.
+          attendanceRecords,
 
           currentlyIn,
 

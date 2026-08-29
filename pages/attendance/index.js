@@ -93,11 +93,13 @@ export default function AttendanceKiosk() {
       const activityRows = [];
 
       teachers.forEach((teacher) => {
-        const attendance = Array.isArray(teacher.attendance)
-          ? teacher.attendance
-          : teacher.attendance
-            ? [teacher.attendance]
-            : [];
+        const attendance = Array.isArray(teacher.attendanceRecords)
+          ? teacher.attendanceRecords
+          : Array.isArray(teacher.attendance)
+            ? teacher.attendance
+            : teacher.attendance
+              ? [teacher.attendance]
+              : [];
 
         attendance.forEach((record) => {
           activityRows.push({

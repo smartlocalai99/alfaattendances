@@ -1,68 +1,3 @@
-// import { admin } from '@/lib/supabaseAdmin';
-// import { getEnrolledFaces } from '@/lib/enrolledFaces';
-// import { faceDistance, isFaceDescriptor } from '@/lib/faceDescriptor';
-
-// const defaultMatchThreshold = 0.58;
-
-// function matchThreshold() {
-//   const configured = Number(process.env.FACE_MATCH_THRESHOLD || process.env.NEXT_PUBLIC_FACE_MATCH_THRESHOLD);
-//   // 0.48 is too strict for descriptors captured from different mobile-camera frames.
-//   return Number.isFinite(configured) ? Math.max(configured, defaultMatchThreshold) : defaultMatchThreshold;
-// }
-
-// function closestMatch(faceDescriptor, enrolledTeachers) {
-//   return enrolledTeachers.reduce((match, teacher) => {
-//     const value = faceDistance(faceDescriptor, teacher.face_descriptor);
-//     return !match || value < match.distance ? { ...teacher, distance: value } : match;
-//   }, null);
-// }
-
-// export default async function handler(req, res) {
-//   if (req.method !== 'POST') return res.status(405).end();
-//   try {
-//     const { faceDescriptor } = req.body;
-//     if (!isFaceDescriptor(faceDescriptor)) throw new Error('Invalid face data.');
-//     const db = admin();
-//     let enrolledTeachers = await getEnrolledFaces();
-//     let match = closestMatch(faceDescriptor, enrolledTeachers);
-
-//     // A newly enrolled face may not be in another server process's short-lived cache.
-//     if (!match || match.distance > matchThreshold()) {
-//       enrolledTeachers = await getEnrolledFaces(true);
-//       match = closestMatch(faceDescriptor, enrolledTeachers);
-//     }
-//     if (!enrolledTeachers.length) {
-//       return res.status(401).json({ error: 'No enrolled teacher faces are available yet.' });
-//     }
-//     if (!match || match.distance > matchThreshold()) {
-//       return res.status(401).json({ error: 'Face not recognized. Use a clear, front-facing view or update the enrolled face.' });
-//     }
-
-//     const attendanceDate = new Intl.DateTimeFormat('en-CA', { timeZone: process.env.SCHOOL_TIMEZONE || 'Asia/Kolkata' }).format(new Date());
-//     const found = await db.from('attendance').select('*').eq('teacher_id', match.id).eq('attendance_date', attendanceDate).maybeSingle();
-//     if (found.error) throw found.error;
-//     let action;
-//     let result;
-//     if (!found.data) {
-//       action = 'in';
-//       result = await db.from('attendance').insert({ teacher_id: match.id, attendance_date: attendanceDate, in_time: new Date().toISOString(), status: 'present', verification_method: 'face' }).select().single();
-//     } else if (!found.data.in_time) {
-//       return res.status(409).json({ error: 'Please mark IN before marking OUT.' });
-//     } else if (!found.data.out_time) {
-//       action = 'out';
-//       result = await db.from('attendance').update({ out_time: new Date().toISOString() }).eq('id', found.data.id).select().single();
-//     } else {
-//       return res.status(409).json({ error: 'OUT is already marked for today.' });
-//     }
-//     if (result.error) throw result.error;
-//     return res.json({ teacher: match.full_name, action, attendance: result.data });
-//   } catch (error) {
-//     return res.status(400).json({ error: error.message || 'Unable to verify attendance.' });
-//   }
-// }
-
-
-
 import { admin } from '@/lib/supabaseAdmin';
 import { getEnrolledFaces } from '@/lib/enrolledFaces';
 import {
@@ -70,28 +5,13 @@ import {
   isFaceDescriptor,
 } from '@/lib/faceDescriptor';
 
-/*
- * STRICT MATCHING
- *
- * Lower = stricter.
- *
- * 0.48 is too strict for descriptors captured from different
- * mobile-camera frames. The average match must remain strong,
- * while one slightly blurry frame is allowed a small tolerance.
- */
+
 const DEFAULT_MATCH_DISTANCE = 0.55;
 const MAX_MATCH_DISTANCE = 0.60;
 const MAX_FRAME_DISTANCE = 0.65;
 
-/*
- * The best teacher must be clearly better
- * than the second-best teacher.
- */
 const MIN_MARGIN = 0.08;
 
-/*
- * Three camera frames are required.
- */
 const MIN_FRAMES = 3;
 
 function getThreshold() {
@@ -107,9 +27,7 @@ function getThreshold() {
   return Math.min(Math.max(configured, 0.45), MAX_MATCH_DISTANCE);
 }
 
-/*
- * Validate all descriptors.
- */
+
 function validDescriptors(value) {
   if (!Array.isArray(value)) {
     return false;
@@ -123,11 +41,7 @@ function validDescriptors(value) {
   );
 }
 
-/*
- * Calculate the face distance for every frame.
- *
- * We use the AVERAGE distance for matching.
- */
+
 function calculateTeacherMatch(
   descriptors,
   teacher
@@ -189,19 +103,7 @@ export default async function handler(
   try {
     const body = req.body || {};
 
-    /*
-     * New FaceCamera sends:
-     *
-     * {
-     *   faceDescriptors: [...]
-     * }
-     *
-     * Keep support for old:
-     *
-     * {
-     *   faceDescriptor: [...]
-     * }
-     */
+    
     let descriptors =
       body.faceDescriptors;
 
@@ -225,11 +127,7 @@ export default async function handler(
 
     const db = admin();
 
-    /*
-     * --------------------------------
-     * LOAD ENROLLED FACES
-     * --------------------------------
-     */
+    
 
     let enrolledTeachers =
       await getEnrolledFaces();
@@ -241,12 +139,7 @@ export default async function handler(
       });
     }
 
-    /*
-     * --------------------------------
-     * FIND BEST MATCH
-     * --------------------------------
-     */
-
+   
     let matches = findMatches(
       descriptors,
       enrolledTeachers
@@ -255,9 +148,7 @@ export default async function handler(
     let best = matches[0];
     let second = matches[1];
 
-    /*
-     * Refresh cache once.
-     */
+    
     if (!best) {
       enrolledTeachers =
         await getEnrolledFaces(true);
@@ -281,15 +172,7 @@ export default async function handler(
     const threshold =
       getThreshold();
 
-    /*
-     * --------------------------------
-     * STRICT DISTANCE CHECK
-     * --------------------------------
-     *
-     * The average must be within the configured threshold. A single
-     * low-quality live frame may be a little farther away, but never
-     * beyond the hard per-frame safety limit.
-     */
+   
     if (
       best.averageDistance >
         threshold ||
@@ -315,11 +198,7 @@ export default async function handler(
       });
     }
 
-    /*
-     * --------------------------------
-     * AMBIGUOUS MATCH CHECK
-     * --------------------------------
-     */
+    
 
     if (second) {
       const margin =
@@ -355,11 +234,7 @@ export default async function handler(
       }
     }
 
-    /*
-     * --------------------------------
-     * TODAY
-     * --------------------------------
-     */
+   
 
     const timezone =
       process.env.SCHOOL_TIMEZONE ||
@@ -376,11 +251,7 @@ export default async function handler(
     const now =
       new Date().toISOString();
 
-    /*
-     * --------------------------------
-     * LOAD TODAY'S RECORDS
-     * --------------------------------
-     */
+    
 
     const existing =
       await db
