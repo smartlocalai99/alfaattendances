@@ -7,7 +7,10 @@ import {
   X,
 } from 'lucide-react';
 import Layout from '@/components/Layout';
-import { calculatePayroll } from '@/lib/payroll';
+import {
+  calculatePayroll,
+  calculatePresentDays,
+} from '@/lib/payroll';
 
 export default function Payroll() {
   const [teachers, setTeachers] = useState([]);
@@ -127,10 +130,11 @@ export default function Payroll() {
               const attendance =
                 data.attendance || [];
 
-              const present = attendance.filter(
-                (item) =>
-                  item.status === 'present'
-              ).length;
+              const present = calculatePresentDays(
+                attendance,
+                start,
+                end
+              );
 
               const leaves = attendance.filter(
                 (item) =>
@@ -511,4 +515,3 @@ export default function Payroll() {
     </Layout>
   );
 }
-

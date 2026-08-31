@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     if (!teacherId || !start || !end) return res.status(400).json({ error: 'Teacher and date range are required.' });
     const attendance = await admin()
       .from('attendance')
-      .select('status')
+      .select('status,attendance_date,in_time')
       .eq('teacher_id', teacherId)
       .gte('attendance_date', start)
       .lte('attendance_date', end);
