@@ -14,6 +14,9 @@ export default async function handler(req, res) {
     const db = admin();
     const { teacherId } = req.body || {};
     const faceDescriptor = enrollmentDescriptor(req.body || {});
+    const frameCount = Array.isArray(req.body?.faceDescriptors) ? req.body.faceDescriptors.length : 0;
+    const descriptorLength = Array.isArray(req.body?.faceDescriptors?.[0]) ? req.body.faceDescriptors[0].length : 0;
+    console.info('Face enrollment save received', { selectedTeacherId: teacherId || null, frameCount, embeddingLength: descriptorLength, embeddingValid: Boolean(faceDescriptor) });
     if (!teacherId || !faceDescriptor) throw new Error('Invalid enrollment data.');
 
     const target = await db.from('teachers').select('id,full_name,face_descriptor').eq('id', teacherId).maybeSingle();
@@ -30,7 +33,7 @@ export default async function handler(req, res) {
       selectedTeacherId: teacherId,
       matchedTeacherId: match?.id || null,
       matchedTeacherName: match?.fullName || null,
-      similarityScore: match ? Number(match.distance.toFixed(4)) : null,
+      distance: match ? Number(match.distance.toFixed(4)) : null,
       duplicateThreshold: duplicateFaceThreshold(),
       duplicate,
     });
@@ -39,7 +42,7 @@ export default async function handler(req, res) {
       return res.status(409).json({
         error: `This face is already linked to ${match.fullName}. Select the correct teacher or use a different face.`,
         code: 'DUPLICATE_FACE',
-        match: { id: match.id, fullName: match.fullName, similarityScore: Number(match.distance.toFixed(4)) },
+        match: { id: match.id, fullName: match.fullName, distance: Number(match.distance.toFixed(4)) },
       });
     }
 

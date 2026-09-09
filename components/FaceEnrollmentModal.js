@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import FaceCamera from '@/components/FaceCamera';
 
 export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete, onSaved }) {
@@ -8,6 +8,19 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
   const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const requestSequence = useRef(0);
+
+  // A modal can be reused or unmounted while a previous camera/API request is
+  // still resolving. Invalidate all prior results before enrolling another ID.
+  useEffect(() => {
+    requestSequence.current += 1;
+    setFaceDescriptors(null);
+    setSaving(false);
+    setCheckingDuplicate(false);
+    setDuplicateMatch(null);
+    setError('');
+    setDone(false);
+  }, [teacherId]);
 
   useEffect(() => {
     if (!done) return;
@@ -16,7 +29,8 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
   }, [done, onComplete]);
 
   const checkDuplicate = useCallback(async (capturedDescriptors) => {
-    setFaceDescriptors(capturedDescriptors);
+    const request = ++requestSequence.current;
+    setFaceDescriptors(null);
     setDuplicateMatch(null);
     setError('');
     setCheckingDuplicate(true);
@@ -29,13 +43,17 @@ export default function FaceEnrollmentModal({ teacherId, teacherName, onComplete
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to validate the face.');
+      if (request !== requestSequence.current) return { stale: true };
       setDuplicateMatch(data.duplicate ? data.match : null);
+      setFaceDescriptors(data.duplicate ? null : capturedDescriptors);
+      return { duplicate: Boolean(data.duplicate) };
     } catch (checkError) {
+      if (request !== requestSequence.current) return { stale: true };
       setFaceDescriptors(null);
       setError(checkError.message);
       throw checkError;
     } finally {
-      setCheckingDuplicate(false);
+      if (request === requestSequence.current) setCheckingDuplicate(false);
     }
   }, [teacherId]);
 

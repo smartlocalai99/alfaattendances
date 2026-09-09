@@ -12,6 +12,9 @@ export default async function handler(req, res) {
   try {
     const { teacherId } = req.body || {};
     const faceDescriptor = enrollmentDescriptor(req.body || {});
+    const frameCount = Array.isArray(req.body?.faceDescriptors) ? req.body.faceDescriptors.length : 0;
+    const descriptorLength = Array.isArray(req.body?.faceDescriptors?.[0]) ? req.body.faceDescriptors[0].length : 0;
+    console.info('Face enrollment capture received', { selectedTeacherId: teacherId || null, frameCount, embeddingLength: descriptorLength, embeddingValid: Boolean(faceDescriptor) });
     if (!teacherId || !faceDescriptor) {
       return res.status(400).json({ error: 'Invalid enrollment data.' });
     }
@@ -26,7 +29,7 @@ export default async function handler(req, res) {
       selectedTeacherId: teacherId,
       matchedTeacherId: match?.id || null,
       matchedTeacherName: match?.fullName || null,
-      similarityScore: match ? Number(match.distance.toFixed(4)) : null,
+      distance: match ? Number(match.distance.toFixed(4)) : null,
       duplicateThreshold: duplicateFaceThreshold(),
       duplicate,
     });
@@ -34,7 +37,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       duplicate,
       match: duplicate
-        ? { id: match.id, fullName: match.fullName, similarityScore: Number(match.distance.toFixed(4)) }
+        ? { id: match.id, fullName: match.fullName, distance: Number(match.distance.toFixed(4)) }
         : null,
     });
   } catch (error) {
