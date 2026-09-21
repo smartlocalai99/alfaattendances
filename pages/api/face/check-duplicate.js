@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     const result = await admin().from('teachers').select('id,full_name,face_descriptor');
     if (result.error) throw result.error;
 
-    const match = closestDifferentTeacherMatch(faceDescriptor, result.data || [], teacherId);
+    const match = closestDifferentTeacherMatch(req.body?.faceDescriptors, result.data || [], teacherId);
     const duplicate = isConfirmedDuplicate(match);
 
     console.info('Face enrollment duplicate check', {
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
       matchedTeacherId: match?.id || null,
       matchedTeacherName: match?.fullName || null,
       distance: match ? Number(match.distance.toFixed(4)) : null,
+      worstFrameDistance: match ? Number(match.worstDistance.toFixed(4)) : null,
       duplicateThreshold: duplicateFaceThreshold(),
       duplicate,
     });

@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     const alreadyEnrolled = isFaceDescriptor(target.data.face_descriptor);
     const existingFaces = await db.from('teachers').select('id,full_name,face_descriptor');
     if (existingFaces.error) throw existingFaces.error;
-    const match = closestDifferentTeacherMatch(faceDescriptor, existingFaces.data || [], teacherId);
+    const match = closestDifferentTeacherMatch(req.body?.faceDescriptors, existingFaces.data || [], teacherId);
     const duplicate = isConfirmedDuplicate(match);
 
     console.info('Face enrollment duplicate check', {
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       matchedTeacherId: match?.id || null,
       matchedTeacherName: match?.fullName || null,
       distance: match ? Number(match.distance.toFixed(4)) : null,
+      worstFrameDistance: match ? Number(match.worstDistance.toFixed(4)) : null,
       duplicateThreshold: duplicateFaceThreshold(),
       duplicate,
     });
